@@ -8,11 +8,13 @@ import { subjectiveSubjects } from '@/data/subjects'
 import SubjectiveModal from '@/components/SubjectiveModal.vue'
 import { useRuntimeMode } from '@/composables/useRuntimeMode'
 import { usePracticeTracker } from '@/composables/usePracticeTracker'
+import { usePracticeCount } from '@/composables/usePracticeCount'
 import type { Subject, Topic } from '@/types'
 
 const message = useMessage()
 const { isNormalMode } = useRuntimeMode()
 const { record: recordPractice, getCount: getPracticeCount } = usePracticeTracker()
+const { getSubjectCount, getSubjectiveTotalCount } = usePracticeCount()
 
 const showModal = ref(false)
 const selectedSubject = ref<Subject | null>(null)
@@ -35,9 +37,14 @@ const handleCopied = () => {
 
 <template>
   <div>
-    <h1 style="font-size: 24px; font-weight: 700; color: #1e293b; margin-bottom: 8px">
-      主观题案例演练
-    </h1>
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px">
+      <h1 style="font-size: 24px; font-weight: 700; color: #1e293b; margin: 0">
+        主观题案例演练
+      </h1>
+      <n-tag v-if="getSubjectiveTotalCount() > 0" size="small" :bordered="false" type="success">
+        已练习 {{ getSubjectiveTotalCount() }} 题
+      </n-tag>
+    </div>
     <p style="color: #64748b; margin-bottom: 24px">
       {{ isNormalMode ? '点击科目展开高频考点' : '点击科目展开高频考点，配置 AI 模型后可进行智能演练' }}
     </p>
@@ -59,8 +66,8 @@ const handleCopied = () => {
       >
         <template #header-extra>
           <n-space>
-            <n-tag v-if="getPracticeCount(subject.id, '') > 0" size="small" :bordered="false" type="success">
-              已练习 {{ getPracticeCount(subject.id, '') }} 题
+            <n-tag v-if="getSubjectCount(subject.id) > 0" size="small" :bordered="false" type="success">
+              已练习 {{ getSubjectCount(subject.id) }} 题
             </n-tag>
             <n-tag size="small" :bordered="false" type="warning">
               {{ subject.topics.length }} 个考点
@@ -91,7 +98,8 @@ const handleCopied = () => {
                 </n-tag>
                 <n-button
                   v-if="isNormalMode"
-                  text
+                  type="warning"
+                  dashed
                   style="color: #f59e0b"
                   @click="openModal(subject, topic)"
                 >

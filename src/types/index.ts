@@ -110,3 +110,80 @@ export interface WrongBookItem {
   referenceAnswer?: string
   isWrong: boolean
 }
+
+// === Exam Outline Tree Structure ===
+
+export interface ExamOutline {
+  id: 'fakao-outline'
+  name: '法考大纲'
+  children: {
+    objective: ObjectiveSection
+    subjective: SubjectiveSection
+  }
+}
+
+export interface ObjectiveSection {
+  id: 'objective'
+  name: '客观题'
+  children: {
+    paper1: PaperSection
+    paper2: PaperSection
+  }
+}
+
+export interface SubjectiveSection {
+  id: 'subjective'
+  name: '主观题'
+  children: Subject[]
+}
+
+export interface PaperSection {
+  id: 'paper1' | 'paper2'
+  name: string
+  children: Subject[]
+}
+
+// === Practice Count Tree Structure ===
+
+export interface PracticeCountNode {
+  id: string
+  count: number
+  children?: PracticeCountNode[] | Record<string, PracticeCountNode>
+}
+
+export interface ExamOutlinePracticeCount {
+  id: 'fakao-outline-practice'
+  name: '练习统计'
+  children: {
+    objective: {
+      id: 'objective'
+      count: number
+      children: {
+        paper1: PaperPracticeCount
+        paper2: PaperPracticeCount
+      }
+    }
+    subjective: {
+      id: 'subjective'
+      count: number
+      children: SubjectPracticeCount[]
+    }
+  }
+}
+
+export interface PaperPracticeCount {
+  id: 'paper1' | 'paper2'
+  count: number
+  children: SubjectPracticeCount[]
+}
+
+export interface SubjectPracticeCount {
+  id: string
+  count: number
+  children: TopicPracticeCount[]
+}
+
+export interface TopicPracticeCount {
+  id: string
+  count: number
+}

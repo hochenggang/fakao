@@ -39,10 +39,16 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '错题集', index: 5 }
       },
       {
+        path: 'outline-notes',
+        name: 'OutlineNotes',
+        component: () => import('@/views/OutlineNotesView.vue'),
+        meta: { title: '大纲笔记', index: 6 }
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: () => import('@/views/SettingsView.vue'),
-        meta: { title: '设置', index: 6 }
+        meta: { title: '设置', index: 7 }
       }
     ]
   }

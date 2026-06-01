@@ -9,7 +9,8 @@ import type { MenuOption } from 'naive-ui'
 import {
   ChevronLeft16Regular, ChevronRight16Regular,
   Home16Regular, DocumentOnePage20Regular,
-  Settings16Regular, Notebook24Regular, NotebookError24Regular
+  Settings16Regular, Notebook24Regular, NotebookError24Regular,
+  BookOpen24Regular
 } from '@vicons/fluent'
 
 const route = useRoute()
@@ -51,6 +52,11 @@ const menuOptions: MenuOption[] = [
     key: '/wrongbook',
     label: '错题集',
     icon: () => h(NotebookError24Regular)
+  },
+  {
+    key: '/outline-notes',
+    label: '大纲',
+    icon: () => h(Notebook24Regular)
   },
   {
     key: '/settings',
