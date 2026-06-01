@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch } from 'vue'
 import {
   NModal, NIcon, NCard, NInput, NButton, NTag, NSpin, NAlert, NDivider
 } from 'naive-ui'
@@ -8,10 +8,12 @@ import { marked } from 'marked'
 import type { SubjectiveQuestion } from '@/types'
 import { useClipboard } from '@/composables/useClipboard'
 import { useRuntimeMode } from '@/composables/useRuntimeMode'
-import { useSettings } from '@/composables/useSettings'
-import { useAiCall } from '@/composables/useAiCall'
-import { getPrompt } from '@/composables/usePromptStore'
+import { useStreamChatWithModel } from '@/composables/useStreamChatWithModel'
+import { buildPrompt } from '@/composables/usePromptStore'
 import { useWrongBook } from '@/composables/useWrongBook'
+import SseStreamModal from './SseStreamModal.vue'
+
+export type PracticeScope = 'topic' | 'subject' | 'paper'
 
 interface Props {
   show: boolean
@@ -19,6 +21,7 @@ interface Props {
   subjectName: string
   topicId: string
   topicName: string
+  scope?: PracticeScope
 }
 
 const props = defineProps<Props>()
@@ -29,8 +32,7 @@ const emit = defineEmits<{
 
 const { copyText } = useClipboard()
 const { isNormalMode } = useRuntimeMode()
-const { settings } = useSettings()
-const { streamChat } = useAiCall()
+const { showStreamModal, streamingText, reasoningText, startStreamChat } = useStreamChatWithModel()
 const { add: addWrongBook } = useWrongBook()
 
 const question = ref<SubjectiveQuestion | null>(null)
@@ -42,6 +44,7 @@ const generating = ref(false)
 const generateError = ref('')
 const score = ref<[number, number] | null>(null)
 const referenceAnswer = ref('')
+const blurStream = ref(false)
 
 const renderedAiResult = computed(() => {
   if (!aiResult.value) return ''
@@ -53,63 +56,20 @@ const renderedReferenceAnswer = computed(() => {
   return marked.parse(referenceAnswer.value)
 })
 
-// SSE Modal states
-const showStreamModal = ref(false)
-const streamingText = ref('')
-const reasoningText = ref('')
-const outputPreRef = ref<HTMLPreElement | null>(null)
-const reasoningPreRef = ref<HTMLPreElement | null>(null)
-
-watch(streamingText, () => {
-  nextTick(() => {
-    const el = outputPreRef.value
-    if (el) el.scrollTop = el.scrollHeight
-  })
-})
-
-watch(reasoningText, () => {
-  nextTick(() => {
-    const el = reasoningPreRef.value
-    if (el) el.scrollTop = el.scrollHeight
-  })
-})
-
-function openStreamModal() {
-  streamingText.value = ''
-  reasoningText.value = ''
-  showStreamModal.value = true
-}
-
-function closeStreamModal() {
-  showStreamModal.value = false
-}
-
 async function generateQuestion() {
   if (!isNormalMode.value) return
   generating.value = true
   generateError.value = ''
   question.value = null
+  blurStream.value = true
 
-  const provider = settings.value.providers[0]
-  const model = provider.models[0]?.name
-
-  const template = getPrompt('subjective-generate')
-  const prompt = template
-    .replace(/\{subject\}/g, props.subjectName)
-    .replace(/\{topic\}/g, props.topicName)
-
-  openStreamModal()
-  streamingText.value = ''
+  const scope = props.scope || 'topic'
+  const prompt = buildPrompt('subjective-generate', props.subjectName, props.topicName, scope)
 
   try {
-    await streamChat(provider, model!, [{ role: 'user', content: prompt }], {
-      onChunk(_, full) {
-        streamingText.value = full
-      },
-      onThinking(_, full) {
-        reasoningText.value = full
-      },
-      onFinish(full) {
+    await startStreamChat({
+      messages: [{ role: 'user', content: prompt }],
+      onFinish: (full) => {
         const match = full.match(/\{[\s\S]*\}/)
         if (match) {
           const data = JSON.parse(match[0])
@@ -123,13 +83,14 @@ async function generateQuestion() {
             }
           }
         }
-        closeStreamModal()
+        generating.value = false
       },
+      onError: (error) => {
+        generateError.value = `出题失败：${error.message}`
+        generating.value = false
+      }
     })
-  } catch (e: any) {
-    generateError.value = `出题失败：${e.message}`
-    closeStreamModal()
-  } finally {
+  } catch {
     generating.value = false
   }
 }
@@ -138,6 +99,7 @@ watch(() => props.show, (val) => {
   if (val) {
     reset()
     if (isNormalMode.value) {
+      blurStream.value = true
       generateQuestion()
     }
   }
@@ -158,29 +120,20 @@ const handleAiJudge = async () => {
   showAiResult.value = true
   score.value = null
   referenceAnswer.value = ''
+  blurStream.value = false
+  
 
-  const provider = settings.value.providers[0]
-  const model = provider.models[0]?.name
-
-  const template = getPrompt('subjective-judge')
-  const prompt = template
-    .replace(/\{subject\}/g, props.subjectName)
-    .replace(/\{topic\}/g, props.topicName)
-    .replace(/\{caseText\}/g, question.value.caseText)
-    .replace(/\{question\}/g, question.value.question)
-    .replace(/\{answer\}/g, answer.value || '（学生未作答）')
-
-  openStreamModal()
+  const scope = props.scope || 'topic'
+  const prompt = buildPrompt('subjective-judge', props.subjectName, props.topicName, scope, {
+    caseText: question.value.caseText,
+    question: question.value.question,
+    answer: answer.value || '（学生未作答）'
+  })
 
   try {
-    await streamChat(provider, model!, [{ role: 'user', content: prompt }], {
-      onChunk(_, full) {
-        streamingText.value = full
-      },
-      onThinking(_, full) {
-        reasoningText.value = full
-      },
-      onFinish(full) {
+    await startStreamChat({
+      messages: [{ role: 'user', content: prompt }],
+      onFinish: (full) => {
         let reportText = full
         let parsedScore: [number, number] | null = null
         let parsedRef = ''
@@ -205,7 +158,6 @@ const handleAiJudge = async () => {
         score.value = parsedScore
         referenceAnswer.value = parsedRef
         aiJudging.value = false
-        closeStreamModal()
 
         addWrongBook({
           id: `${props.subjectId}-${props.topicId}-${Date.now()}`,
@@ -224,10 +176,13 @@ const handleAiJudge = async () => {
           isWrong: true,
         })
       },
+      onError: (error) => {
+        aiJudging.value = false
+        aiResult.value = `AI 评判出错：${error.message}\n\n请检查模型配置是否正确。`
+      }
     })
   } catch (e: any) {
     aiJudging.value = false
-    closeStreamModal()
     aiResult.value = `AI 评判出错：${e.message}\n\n请检查模型配置是否正确。`
   }
 }
@@ -235,11 +190,13 @@ const handleAiJudge = async () => {
 const buildCopyPrompt = (): string => {
   const q = question.value
   if (!q) return ''
+  const scope = props.scope || 'topic'
+  const scopeLabel = scope === 'paper' ? '整卷综合' : scope === 'subject' ? '科目综合' : props.topicName
   return `你是一位资深的中国国家统一法律职业资格考试（法考）主观题阅卷组专家。
-请按照官方阅卷标准，对以下学生答卷进行专业评分和深度点评。
+请按照官方阅卷标准，对以下学生答卷进行专业评分和深度点评。请确保输出**清晰易懂不冗长**。
 
 【科目领域】: ${props.subjectName}
-【核心考点】: ${props.topicName}
+【出题范围】: ${scopeLabel}
 
 【案情材料】:
 ${q.caseText}
@@ -431,23 +388,12 @@ const handleClose = () => {
     </template>
   </n-modal>
 
-  <!-- SSE Stream Modal -->
-  <n-modal
+  <SseStreamModal
     v-model:show="showStreamModal"
-    :mask-closable="false"
-    preset="card"
-    style="width: 680px; max-height: 80vh; overflow-y: auto;"
-    :closable="false"
-  >
-    <div v-if="reasoningText" class="modal-reasoning">
-      <div class="modal-section-label">思考过程</div>
-      <pre ref="reasoningPreRef" class="modal-reasoning-content">{{ reasoningText }}</pre>
-    </div>
-    <div class="modal-output">
-      <div class="modal-section-label">模型输出</div>
-      <pre ref="outputPreRef" class="modal-output-content">{{ streamingText || '正在等待模型响应...' }}</pre>
-    </div>
-  </n-modal>
+    :streaming-text="streamingText"
+    :reasoning-text="reasoningText"
+    :blur="blurStream"
+  />
 </template>
 
 <style scoped>
@@ -510,48 +456,5 @@ const handleClose = () => {
   padding: 12px;
   border-radius: 8px;
   overflow-x: auto;
-}
-
-.modal-reasoning {
-  margin-bottom: 16px;
-}
-
-.modal-section-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #94a3b8;
-  margin-bottom: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.modal-reasoning-content {
-  background: #ffffff;
-  padding: 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  line-height: 1.7;
-  color: #475569;
-  max-height: 200px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  margin: 0;
-  border: 1px solid #e2e8f0;
-}
-
-.modal-output-content {
-  background: #f8fafc;
-  padding: 12px;
-  border-radius: 8px;
-  font-size: 14px;
-  line-height: 1.7;
-  color: #334155;
-  max-height: 400px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  margin: 0;
-  border: 1px solid #e2e8f0;
 }
 </style>

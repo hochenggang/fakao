@@ -1,5 +1,6 @@
 import { reactive, watchEffect } from 'vue'
 import type { PromptKey } from '@/types'
+import { knowledgeModules } from '@/data/knowledge'
 
 const STORAGE_KEY = 'fakao_prompts'
 
@@ -18,6 +19,11 @@ const DEFAULT_PROMPTS: Record<PromptKey, string> = {
 
 【科目领域】: {subject}
 【核心考点】: {topic}
+
+【相关法考大纲知识】:
+\`\`\`markdown
+{knowledgeContext}
+\`\`\`
 
 【单选题】
 题干：{singleQuestion}
@@ -38,6 +44,9 @@ const DEFAULT_PROMPTS: Record<PromptKey, string> = {
 
 【科目领域】: {subject}
 【核心考点】: {topic}
+
+【相关法考大纲知识】:
+{knowledgeContext}
 
 【案情材料】:
 {caseText}
@@ -64,6 +73,11 @@ const DEFAULT_PROMPTS: Record<PromptKey, string> = {
 
 【科目领域】: {subject}
 【核心考点】: {topic}
+
+【相关法考大纲知识】:
+\`\`\`markdown
+{knowledgeContext}
+\`\`\`
 
 【出题要求】:
 - 生成1道单选题和1道多选题
@@ -102,6 +116,11 @@ const DEFAULT_PROMPTS: Record<PromptKey, string> = {
 
 【科目领域】: {subject}
 【核心考点】: {topic}
+
+【相关法考大纲知识】:
+\`\`\`markdown
+{knowledgeContext}
+\`\`\`
 
 【出题要求】:
 - 生成1道主观题案例，包含案情材料和问题
@@ -149,6 +168,41 @@ function hasCustom(key: PromptKey): boolean {
   return !!custom[key]
 }
 
+export function getKnowledgeContext(subjectName: string): string {
+  const module = knowledgeModules.find(m => m.name === subjectName)
+  return module?.content || ''
+}
+
+export function buildPrompt(
+  key: PromptKey,
+  subjectName: string,
+  topicName: string,
+  scope: 'topic' | 'subject' | 'paper' = 'topic',
+  extraReplacements: Record<string, string> = {}
+): string {
+  let basePrompt = getPrompt(key)
+  const knowledgeContext = getKnowledgeContext(subjectName)
+
+  if (scope === 'subject') {
+    basePrompt = basePrompt.replace(/【核心考点】: \{topic\}/g, '【出题范围】: 科目综合（可涵盖该科目任意考点）')
+  } else if (scope === 'paper') {
+    basePrompt = basePrompt.replace(/【科目领域】: \{subject\}/g, '【出题范围】: 整卷综合')
+      .replace(/【核心考点】: \{topic\}/g, '【出题范围】: 整卷综合（可涵盖该试卷任意科目的任意考点）')
+  }
+
+  let prompt = basePrompt
+    .replace(/\{subject\}/g, subjectName)
+    .replace(/\{topic\}/g, topicName)
+    .replace(/\{knowledgeContext\}/g, knowledgeContext)
+
+  for (const [k, v] of Object.entries(extraReplacements)) {
+    const regex = new RegExp(`\\{${k}\\}`, 'g')
+    prompt = prompt.replace(regex, v)
+  }
+
+  return prompt
+}
+
 export function usePromptStore() {
   return {
     custom,
@@ -157,6 +211,8 @@ export function usePromptStore() {
     removeCustom,
     getPrompt,
     hasCustom,
+    getKnowledgeContext,
+    buildPrompt,
   }
 }
 

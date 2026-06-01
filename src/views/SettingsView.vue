@@ -11,12 +11,8 @@
       <n-tab-pane name="models" tab="模型设置">
         <div class="tab-content">
           <n-collapse v-if="settings.providers.length" v-model:expanded-names="expandedNames">
-            <n-collapse-item
-              v-for="(provider, pi) in settings.providers"
-              :key="provider.id"
-              :name="provider.id"
-              :title="provider.name || '未命名供应商'"
-            >
+            <n-collapse-item v-for="(provider, pi) in settings.providers" :key="provider.id" :name="provider.id"
+              :title="provider.name || '未命名供应商'">
               <template #header-extra>
                 <n-popconfirm :show-icon="false" @positive-click="removeProvider(pi)">
                   <template #trigger>
@@ -32,25 +28,23 @@
 
               <n-form label-placement="top" class="provider-form">
                 <n-form-item label="供应商名称">
-                  <n-input :ref="el => setNameInputRef(el, provider.id)" v-model:value="provider.name" placeholder="例如：OpenAI / DeepSeek" />
+                  <n-input :ref="el => setNameInputRef(el, provider.id)" v-model:value="provider.name"
+                    placeholder="例如：OpenAI / DeepSeek" />
                 </n-form-item>
                 <n-form-item label="Base URL">
                   <n-input v-model:value="provider.baseUrl" placeholder="https://api.openai.com/v1/chat/completions" />
                 </n-form-item>
                 <n-form-item label="API Key">
-                  <n-input
-                    v-model:value="provider.apiKey"
-                    type="password"
-                    show-password-on="click"
-                    placeholder="sk-..."
-                  />
+                  <n-input v-model:value="provider.apiKey" type="password" show-password-on="click"
+                    placeholder="sk-..." />
                 </n-form-item>
 
                 <n-form-item>
                   <template #label>
                     <div class="label-row">
                       <span>模型列表</span>
-                      <n-button style="margin-left: 5px;" size="tiny" quaternary aria-label="添加模型" @click="addModel(pi)">
+                      <n-button style="margin-left: 5px;" size="tiny" quaternary aria-label="添加模型"
+                        @click="addModel(pi)">
                         <n-icon>
                           <AddOutline />
                         </n-icon>
@@ -93,6 +87,13 @@
           <n-alert :show-icon="false" type="info" :style="{ maxWidth: '640px', margin: '12px 0' }">
             支持任意兼容 OpenAI 接口风格的服务商，例如 OpenAI、DeepSeek、通义千问等。配置后将自动启用 AI 智能评判和动态出题功能。
           </n-alert>
+
+          <div :style="{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #e2e8f0', textAlign: 'center' }">
+            <a href="https://github.com/CacinieP/LPQE-Learning" target="_blank" rel="noopener noreferrer"
+              :style="{ fontSize: '13px', color: '#94a3b8', textDecoration: 'none' }">
+              鸣谢 LPQE-Learning 开源项目
+            </a>
+          </div>
         </div>
       </n-tab-pane>
 
@@ -100,12 +101,8 @@
         <div class="tab-content">
           <n-collapse>
             <n-collapse-item v-for="item in promptItems" :key="item.key" :title="item.label">
-              <n-input
-                v-model:value="custom[item.key]"
-                :placeholder="defaults[item.key]"
-                type="textarea"
-                :autosize="{ minRows: 6, maxRows: 20 }"
-              />
+              <n-input v-model:value="custom[item.key]" :placeholder="defaults[item.key]" type="textarea"
+                :autosize="{ minRows: 6, maxRows: 20 }" />
               <div v-if="hasCustom(item.key)" class="reset-row">
                 <n-button text type="warning" size="small" @click="onResetPrompt(item.key)">
                   恢复默认
@@ -149,7 +146,8 @@
           </div>
 
           <!-- 操作区 -->
-          <div v-if="wrongBookItems.length > 0" style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px">
+          <div v-if="wrongBookItems.length > 0"
+            style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px">
             <n-popconfirm :show-icon="false" @positive-click="clearWrongBook">
               <template #trigger>
                 <n-button type="error" secondary>
@@ -166,11 +164,7 @@
             <span style="font-size: 13px; color: #94a3b8">清空后将无法恢复，请谨慎操作</span>
           </div>
 
-          <n-empty
-            v-if="wrongBookItems.length === 0"
-            description="暂无错题记录"
-            :style="{ marginTop: '60px' }"
-          />
+          <n-empty v-if="wrongBookItems.length === 0" description="暂无错题记录" :style="{ marginTop: '60px' }" />
         </div>
       </n-tab-pane>
     </n-tabs>

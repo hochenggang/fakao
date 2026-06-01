@@ -1,7 +1,7 @@
 import { computed } from 'vue'
 import { examOutline } from '@/data/subjects'
 import { usePracticeTracker } from './usePracticeTracker'
-import type { Subject, Topic } from '@/types'
+import type { Subject } from '@/types'
 
 export interface PracticeCountTree {
   id: string
@@ -12,12 +12,13 @@ export interface PracticeCountTree {
 
 function buildSubjectCount(
   subject: Subject,
-  getTopicCount: (subjectId: string, topicId: string) => number
+  type: 'objective' | 'subjective',
+  getTopicCount: (subjectId: string, topicId: string, type: 'objective' | 'subjective') => number
 ): PracticeCountTree {
   const topicCounts = subject.topics.map(topic => ({
     id: topic.id,
     name: topic.name,
-    count: getTopicCount(subject.id, topic.id)
+    count: getTopicCount(subject.id, topic.id, type)
   }))
 
   const totalCount = topicCounts.reduce((sum, t) => sum + t.count, 0)
@@ -35,7 +36,7 @@ export function usePracticeCount() {
 
   const objectivePaper1Count = computed(() => {
     const subjects = examOutline.children.objective.children.paper1.children
-    const subjectCounts = subjects.map(s => buildSubjectCount(s, getPracticeCount))
+    const subjectCounts = subjects.map(s => buildSubjectCount(s, 'objective', getPracticeCount))
     const totalCount = subjectCounts.reduce((sum, s) => sum + s.count, 0)
 
     return {
@@ -48,7 +49,7 @@ export function usePracticeCount() {
 
   const objectivePaper2Count = computed(() => {
     const subjects = examOutline.children.objective.children.paper2.children
-    const subjectCounts = subjects.map(s => buildSubjectCount(s, getPracticeCount))
+    const subjectCounts = subjects.map(s => buildSubjectCount(s, 'objective', getPracticeCount))
     const totalCount = subjectCounts.reduce((sum, s) => sum + s.count, 0)
 
     return {
@@ -73,7 +74,7 @@ export function usePracticeCount() {
 
   const subjectiveCount = computed(() => {
     const subjects = examOutline.children.subjective.children
-    const subjectCounts = subjects.map(s => buildSubjectCount(s, getPracticeCount))
+    const subjectCounts = subjects.map(s => buildSubjectCount(s, 'subjective', getPracticeCount))
     const totalCount = subjectCounts.reduce((sum, s) => sum + s.count, 0)
 
     return {
@@ -97,7 +98,7 @@ export function usePracticeCount() {
     }
   })
 
-  function getSubjectCount(subjectId: string): number {
+  function getSubjectCount(subjectId: string, type: 'objective' | 'subjective'): number {
     const allSubjects = [
       ...examOutline.children.objective.children.paper1.children,
       ...examOutline.children.objective.children.paper2.children,
@@ -107,7 +108,7 @@ export function usePracticeCount() {
     const subject = allSubjects.find(s => s.id === subjectId)
     if (!subject) return 0
 
-    return subject.topics.reduce((sum, topic) => sum + getPracticeCount(subjectId, topic.id), 0)
+    return subject.topics.reduce((sum, topic) => sum + getPracticeCount(subjectId, topic.id, type), 0)
   }
 
   function getPaperCount(paperId: 'paper1' | 'paper2'): number {

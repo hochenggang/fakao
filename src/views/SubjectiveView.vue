@@ -19,11 +19,30 @@ const { getSubjectCount, getSubjectiveTotalCount } = usePracticeCount()
 const showModal = ref(false)
 const selectedSubject = ref<Subject | null>(null)
 const selectedTopic = ref<Topic | null>(null)
+const selectedScope = ref<'topic' | 'subject' | 'paper'>('topic')
 
-const openModal = (subject: Subject, topic: Topic) => {
+const openTopicModal = (subject: Subject, topic: Topic) => {
   selectedSubject.value = subject
   selectedTopic.value = topic
-  recordPractice(subject.id, topic.id)
+  selectedScope.value = 'topic'
+  recordPractice(subject.id, topic.id, 'subjective')
+  showModal.value = true
+}
+
+const openSubjectModal = (subject: Subject) => {
+  selectedSubject.value = subject
+  selectedTopic.value = subject.topics[0]
+  selectedScope.value = 'subject'
+  subject.topics.forEach(t => recordPractice(subject.id, t.id, 'subjective'))
+  showModal.value = true
+}
+
+const openAllModal = () => {
+  const firstSubject = subjectiveSubjects[0]
+  selectedSubject.value = firstSubject
+  selectedTopic.value = firstSubject.topics[0]
+  selectedScope.value = 'paper'
+  subjectiveSubjects.forEach(s => s.topics.forEach(t => recordPractice(s.id, t.id, 'subjective')))
   showModal.value = true
 }
 
@@ -41,79 +60,71 @@ const handleCopied = () => {
       <h1 style="font-size: 24px; font-weight: 700; color: #1e293b; margin: 0">
         主观题案例演练
       </h1>
-      <n-tag v-if="getSubjectiveTotalCount() > 0" size="small" :bordered="false" type="success">
-        已练习 {{ getSubjectiveTotalCount() }} 题
-      </n-tag>
+      <n-space>
+        <n-tag v-if="getSubjectiveTotalCount() > 0" size="small" :bordered="false" type="success">
+          已练习 {{ getSubjectiveTotalCount() }} 题
+        </n-tag>
+        <n-button v-if="isNormalMode" size="tiny" type="primary" @click="openAllModal">
+          <template #icon>
+            <Edit16Regular />
+          </template>
+          刷题
+        </n-button>
+      </n-space>
     </div>
     <p style="color: #64748b; margin-bottom: 24px">
       {{ isNormalMode ? '点击科目展开高频考点' : '点击科目展开高频考点，配置 AI 模型后可进行智能演练' }}
     </p>
 
-    <n-alert
-      v-if="!isNormalMode"
-      type="warning"
-      :show-icon="false"
-      style="margin-bottom: 20px"
-    >
+    <n-alert v-if="!isNormalMode" type="warning" :show-icon="false" style="margin-bottom: 20px">
       当前为降级运行模式。前往「设置」配置 AI 大语言模型，即可启用 AI 阅卷点评等高级功能。
     </n-alert>
 
     <n-collapse :accordion="false">
-      <n-collapse-item
-        v-for="subject in subjectiveSubjects"
-        :key="subject.id"
-        :title="subject.name"
-      >
+      <n-collapse-item v-for="subject in subjectiveSubjects" :key="subject.id" :title="subject.name">
         <template #header-extra>
           <n-space>
-            <n-tag v-if="getSubjectCount(subject.id) > 0" size="small" :bordered="false" type="success">
-              已练习 {{ getSubjectCount(subject.id) }} 题
+            <n-tag v-if="getSubjectCount(subject.id, 'subjective') > 0" size="small" :bordered="false" type="success">
+              已练习 {{ getSubjectCount(subject.id, 'subjective') }} 题
             </n-tag>
             <n-tag size="small" :bordered="false" type="warning">
               {{ subject.topics.length }} 个考点
             </n-tag>
+            <n-button v-if="isNormalMode" size="tiny" type="primary"
+              @click.stop="openSubjectModal(subject)">
+              <template #icon>
+                <Edit16Regular />
+              </template>
+              刷题
+            </n-button>
           </n-space>
         </template>
 
         <div style="display: flex; flex-direction: column; gap: 8px">
-          <n-card
-            v-for="topic in subject.topics"
-            :key="topic.id"
-            :bordered="false"
-            size="small"
-            style="background: #f8fafc;"
-          >
+          <n-card v-for="topic in subject.topics" :key="topic.id" :bordered="false" size="small"
+            style="background: #f8fafc;">
             <div style="display: flex; align-items: center; justify-content: space-between">
               <div>
                 <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px">
                   {{ topic.name }}
+                  <n-tag v-if="getPracticeCount(subject.id, topic.id, 'subjective') > 0" size="small" :bordered="false"
+                    type="success">
+                    已练习 {{ getPracticeCount(subject.id, topic.id, 'subjective') }} 题
+                  </n-tag>
                 </div>
                 <div style="font-size: 13px; color: #64748b">
                   {{ topic.description }}
                 </div>
               </div>
               <div style="display: flex; align-items: center; gap: 8px">
-                <n-tag v-if="getPracticeCount(subject.id, topic.id) > 0" size="small" :bordered="false" type="success">
-                  已练习 {{ getPracticeCount(subject.id, topic.id) }} 题
-                </n-tag>
-                <n-button
-                  v-if="isNormalMode"
-                  type="warning"
-                  dashed
-                  style="color: #f59e0b"
-                  @click="openModal(subject, topic)"
-                >
+                <n-button v-if="isNormalMode" size="tiny" type="primary"
+                  @click="openTopicModal(subject, topic)">
                   <template #icon>
                     <Edit16Regular />
                   </template>
-                  演练
+                  刷题
                 </n-button>
-                <n-tag
-                  v-else
-                  size="small"
-                  :bordered="false"
-                  style="background: #f1f5f9; color: #94a3b8"
-                >
+                <n-tag v-else size="small" :bordered="false" style="background: #f1f5f9; color: #94a3b8">
                   需配置 AI
                 </n-tag>
               </div>
@@ -123,13 +134,8 @@ const handleCopied = () => {
       </n-collapse-item>
     </n-collapse>
 
-    <SubjectiveModal
-      v-model:show="showModal"
-      :subject-id="selectedSubject?.id || ''"
-      :subject-name="selectedSubject?.name || ''"
-      :topic-id="selectedTopic?.id || ''"
-      :topic-name="selectedTopic?.name || ''"
-      @copied="handleCopied"
-    />
+    <SubjectiveModal v-model:show="showModal" :subject-id="selectedSubject?.id || ''"
+      :subject-name="selectedSubject?.name || ''" :topic-id="selectedTopic?.id || ''"
+      :topic-name="selectedTopic?.name || ''" :scope="selectedScope" @copied="handleCopied" />
   </div>
 </template>

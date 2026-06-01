@@ -28,11 +28,30 @@ const paperTotalCount = computed(() => getPaperCount(paper.value as 'paper1' | '
 const showModal = ref(false)
 const selectedSubject = ref<Subject | null>(null)
 const selectedTopic = ref<Topic | null>(null)
+const selectedScope = ref<'topic' | 'subject' | 'paper'>('topic')
 
-const openModal = (subject: Subject, topic: Topic) => {
+const openTopicModal = (subject: Subject, topic: Topic) => {
   selectedSubject.value = subject
   selectedTopic.value = topic
-  recordPractice(subject.id, topic.id)
+  selectedScope.value = 'topic'
+  recordPractice(subject.id, topic.id, 'objective')
+  showModal.value = true
+}
+
+const openSubjectModal = (subject: Subject) => {
+  selectedSubject.value = subject
+  selectedTopic.value = subject.topics[0]
+  selectedScope.value = 'subject'
+  subject.topics.forEach(t => recordPractice(subject.id, t.id, 'objective'))
+  showModal.value = true
+}
+
+const openPaperModal = () => {
+  const firstSubject = subjects.value[0]
+  selectedSubject.value = firstSubject
+  selectedTopic.value = firstSubject.topics[0]
+  selectedScope.value = 'paper'
+  subjects.value.forEach(s => s.topics.forEach(t => recordPractice(s.id, t.id, 'objective')))
   showModal.value = true
 }
 
@@ -57,9 +76,17 @@ const handleAiJudged = () => {
       <h1 style="font-size: 24px; font-weight: 700; color: #1e293b; margin: 0">
         {{ paper === 'paper1' ? '客观题 · 卷一（公法卷）' : '客观题 · 卷二（私法卷）' }}
       </h1>
-      <n-tag v-if="paperTotalCount > 0" size="small" :bordered="false" type="success">
-        本卷已练习 {{ paperTotalCount }} 题
-      </n-tag>
+      <n-space>
+        <n-tag v-if="paperTotalCount > 0" size="small" :bordered="false" type="success">
+          本卷已练习 {{ paperTotalCount }} 题
+        </n-tag>
+        <n-button v-if="isNormalMode" size="tiny" type="primary" @click="openPaperModal">
+          <template #icon>
+            <Edit16Regular />
+          </template>
+          刷题
+        </n-button>
+      </n-space>
     </div>
     <p style="color: #64748b; margin-bottom: 24px">
       {{ isNormalMode ? '点击科目展开高频考点' : '点击科目展开高频考点，配置 AI 模型后可进行智能演练' }}
@@ -73,12 +100,19 @@ const handleAiJudged = () => {
       <n-collapse-item v-for="subject in subjects" :key="subject.id" :title="subject.name">
         <template #header-extra>
           <n-space>
-            <n-tag v-if="getSubjectCount(subject.id) > 0" size="small" :bordered="false" type="success">
-              已练习 {{ getSubjectCount(subject.id) }} 题
+            <n-tag v-if="getSubjectCount(subject.id, 'objective') > 0" size="small" :bordered="false" type="success">
+              已练习 {{ getSubjectCount(subject.id, 'objective') }} 题
             </n-tag>
             <n-tag size="small" :bordered="false" type="info">
               {{ subject.topics.length }} 个考点
             </n-tag>
+            <n-button v-if="isNormalMode" size="tiny" type="primary"
+              @click.stop="openSubjectModal(subject)">
+              <template #icon>
+                <Edit16Regular />
+              </template>
+              刷题
+            </n-button>
           </n-space>
         </template>
 
@@ -89,9 +123,9 @@ const handleAiJudged = () => {
               <div>
                 <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px">
                   {{ topic.name }}
-                  <n-tag v-if="getPracticeCount(subject.id, topic.id) > 0" size="small" :bordered="false"
-                     type="success">
-                    已练习 {{ getPracticeCount(subject.id, topic.id) }} 题
+                  <n-tag v-if="getPracticeCount(subject.id, topic.id, 'objective') > 0" size="small" :bordered="false"
+                    type="success">
+                    已练习 {{ getPracticeCount(subject.id, topic.id, 'objective') }} 题
                   </n-tag>
                 </div>
                 <div style="font-size: 13px; color: #64748b">
@@ -100,11 +134,12 @@ const handleAiJudged = () => {
               </div>
               <div style="display: flex; align-items: center; gap: 8px">
 
-                <n-button v-if="isNormalMode" dashed type="info" style="color: #2563eb" @click="openModal(subject, topic)">
+                <n-button v-if="isNormalMode" size="tiny" type="primary"
+                  @click="openTopicModal(subject, topic)">
                   <template #icon>
                     <Edit16Regular />
                   </template>
-                  演练
+                  刷题
                 </n-button>
                 <n-tag v-else size="small" :bordered="false" style="background: #f1f5f9; color: #94a3b8">
                   需配置 AI
@@ -118,6 +153,6 @@ const handleAiJudged = () => {
 
     <ObjectiveModal v-model:show="showModal" :subject-id="selectedSubject?.id || ''"
       :subject-name="selectedSubject?.name || ''" :topic-id="selectedTopic?.id || ''"
-      :topic-name="selectedTopic?.name || ''" @copied="handleCopied" @ai-judged="handleAiJudged" />
+      :topic-name="selectedTopic?.name || ''" :scope="selectedScope" @copied="handleCopied" @ai-judged="handleAiJudged" />
   </div>
 </template>

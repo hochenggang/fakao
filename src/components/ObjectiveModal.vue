@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch } from 'vue'
 import {
   NModal, NIcon, NCard, NRadio, NRadioGroup, NCheckbox,
   NCheckboxGroup, NSpace, NButton, NDivider, NTag, NAlert, NSpin
@@ -9,10 +9,12 @@ import { marked } from 'marked'
 import type { ObjectiveQuestion } from '@/types'
 import { useClipboard } from '@/composables/useClipboard'
 import { useRuntimeMode } from '@/composables/useRuntimeMode'
-import { useSettings } from '@/composables/useSettings'
-import { useAiCall } from '@/composables/useAiCall'
-import { getPrompt } from '@/composables/usePromptStore'
+import { useStreamChatWithModel } from '@/composables/useStreamChatWithModel'
+import { buildPrompt } from '@/composables/usePromptStore'
 import { useWrongBook } from '@/composables/useWrongBook'
+import SseStreamModal from './SseStreamModal.vue'
+
+export type PracticeScope = 'topic' | 'subject' | 'paper'
 
 interface Props {
   show: boolean
@@ -20,6 +22,7 @@ interface Props {
   subjectName: string
   topicId: string
   topicName: string
+  scope?: PracticeScope
 }
 
 const props = defineProps<Props>()
@@ -31,8 +34,7 @@ const emit = defineEmits<{
 
 const { copyText } = useClipboard()
 const { isNormalMode } = useRuntimeMode()
-const { settings } = useSettings()
-const { streamChat } = useAiCall()
+const { showStreamModal, streamingText, reasoningText, startStreamChat } = useStreamChatWithModel()
 const { add: addWrongBook } = useWrongBook()
 
 const singleQuestion = ref<ObjectiveQuestion | null>(null)
@@ -45,6 +47,7 @@ const aiResult = ref('')
 const showAiResult = ref(false)
 const generating = ref(false)
 const generateError = ref('')
+const blurStream = ref(false)
 
 const singleCorrect = computed(() => {
   if (!singleQuestion.value || !singleAnswer.value) return false
@@ -69,64 +72,21 @@ const renderedAiResult = computed(() => {
   return marked.parse(aiResult.value)
 })
 
-// SSE Modal states
-const showStreamModal = ref(false)
-const streamingText = ref('')
-const reasoningText = ref('')
-const outputPreRef = ref<HTMLPreElement | null>(null)
-const reasoningPreRef = ref<HTMLPreElement | null>(null)
-
-watch(streamingText, () => {
-  nextTick(() => {
-    const el = outputPreRef.value
-    if (el) el.scrollTop = el.scrollHeight
-  })
-})
-
-watch(reasoningText, () => {
-  nextTick(() => {
-    const el = reasoningPreRef.value
-    if (el) el.scrollTop = el.scrollHeight
-  })
-})
-
-function openStreamModal() {
-  streamingText.value = ''
-  reasoningText.value = ''
-  showStreamModal.value = true
-}
-
-function closeStreamModal() {
-  showStreamModal.value = false
-}
-
 async function generateQuestions() {
   if (!isNormalMode.value) return
   generating.value = true
   generateError.value = ''
   singleQuestion.value = null
   multiQuestion.value = null
+  blurStream.value = true
 
-  const provider = settings.value.providers[0]
-  const model = provider.models[0]?.name
-
-  const template = getPrompt('objective-generate')
-  const prompt = template
-    .replace(/\{subject\}/g, props.subjectName)
-    .replace(/\{topic\}/g, props.topicName)
-
-  openStreamModal()
-  streamingText.value = ''
+  const scope = props.scope || 'topic'
+  const prompt = buildPrompt('objective-generate', props.subjectName, props.topicName, scope)
 
   try {
-    await streamChat(provider, model!, [{ role: 'user', content: prompt }], {
-      onChunk(_, full) {
-        streamingText.value = full
-      },
-      onThinking(_, full) {
-        reasoningText.value = full
-      },
-      onFinish(full) {
+    await startStreamChat({
+      messages: [{ role: 'user', content: prompt }],
+      onFinish: (full) => {
         const match = full.match(/\{[\s\S]*\}/)
         if (match) {
           const data = JSON.parse(match[0])
@@ -149,13 +109,14 @@ async function generateQuestions() {
             }
           }
         }
-        closeStreamModal()
+        generating.value = false
       },
+      onError: (error) => {
+        generateError.value = `出题失败：${error.message}`
+        generating.value = false
+      }
     })
-  } catch (e: any) {
-    generateError.value = `出题失败：${e.message}`
-    closeStreamModal()
-  } finally {
+  } catch {
     generating.value = false
   }
 }
@@ -164,6 +125,7 @@ watch(() => props.show, (val) => {
   if (val) {
     reset()
     if (isNormalMode.value) {
+      blurStream.value = true
       generateQuestions()
     }
   }
@@ -177,39 +139,29 @@ const handleAiJudge = async () => {
   aiJudging.value = true
   aiResult.value = ''
   showAiResult.value = true
+  blurStream.value = false
 
-  const provider = settings.value.providers[0]
-  const model = provider.models[0]?.name
 
-  const template = getPrompt('objective-judge')
-  const prompt = template
-    .replace(/\{subject\}/g, props.subjectName)
-    .replace(/\{topic\}/g, props.topicName)
-    .replace(/\{singleQuestion\}/g, singleQuestion.value?.question || '无')
-    .replace(/\{singleAnswer\}/g, singleAnswer.value || '未作答')
-    .replace(/\{singleCorrect\}/g, (singleQuestion.value?.correctAnswer as string) || '')
-    .replace(/\{multiQuestion\}/g, multiQuestion.value?.question || '无')
-    .replace(/\{multiAnswer\}/g, multiAnswer.value.length > 0 ? multiAnswer.value.join('、') : '未作答')
-    .replace(/\{multiCorrect\}/g, multiQuestion.value ? (multiQuestion.value.correctAnswer as string[]).join('、') : '')
-
-  openStreamModal()
+  const scope = props.scope || 'topic'
+  const prompt = buildPrompt('objective-judge', props.subjectName, props.topicName, scope, {
+    singleQuestion: singleQuestion.value?.question || '无',
+    singleAnswer: singleAnswer.value || '未作答',
+    singleCorrect: (singleQuestion.value?.correctAnswer as string) || '',
+    multiQuestion: multiQuestion.value?.question || '无',
+    multiAnswer: multiAnswer.value.length > 0 ? multiAnswer.value.join('、') : '未作答',
+    multiCorrect: multiQuestion.value ? (multiQuestion.value.correctAnswer as string[]).join('、') : ''
+  })
 
   try {
-    await streamChat(provider, model!, [{ role: 'user', content: prompt }], {
-      onChunk(_, full) {
-        streamingText.value = full
-      },
-      onThinking(_, full) {
-        reasoningText.value = full
-      },
-      onFinish(full) {
+    await startStreamChat({
+      messages: [{ role: 'user', content: prompt }],
+      onFinish: (full) => {
         aiResult.value = full
         aiJudging.value = false
-        closeStreamModal()
         emit('ai-judged')
 
         const hasWrong = (!singleCorrect.value && singleQuestion.value !== null) ||
-                         (!multiCorrect.value && multiQuestion.value !== null)
+          (!multiCorrect.value && multiQuestion.value !== null)
         if (hasWrong) {
           addWrongBook({
             id: `${props.subjectId}-${props.topicId}-${Date.now()}`,
@@ -230,10 +182,13 @@ const handleAiJudge = async () => {
           })
         }
       },
+      onError: (error) => {
+        aiJudging.value = false
+        aiResult.value = `AI 评判出错：${error.message}\n\n请检查模型配置是否正确。`
+      }
     })
   } catch (e: any) {
     aiJudging.value = false
-    closeStreamModal()
     aiResult.value = `AI 评判出错：${e.message}\n\n请检查模型配置是否正确。`
   }
 }
@@ -241,7 +196,9 @@ const handleAiJudge = async () => {
 const buildCopyPrompt = (): string => {
   const sq = singleQuestion.value
   const mq = multiQuestion.value
-  let text = `你是一位高胜率的中国国家统一法律职业资格考试（法考）客观题辅导名师。\n请对学生的如下做题结果、考点上下文进行精准错因剖析，指出干扰项的挖坑套路。\n\n【科目领域】: ${props.subjectName}\n【核心考点】: ${props.topicName}\n\n`
+  const scope = props.scope || 'topic'
+  const scopeLabel = scope === 'paper' ? '整卷综合' : scope === 'subject' ? '科目综合' : props.topicName
+  let text = `你是一位高胜率的中国国家统一法律职业资格考试（法考）客观题辅导名师。\n请对学生的如下做题结果、考点上下文进行精准错因剖析，指出干扰项的挖坑套路。\n\n【科目领域】: ${props.subjectName}\n【出题范围】: ${scopeLabel}\n\n`
   if (sq) {
     text += `【单选题干】: ${sq.question}\n【学生作答】: ${singleAnswer.value || '未作答'} | 【正确答案】: ${sq.correctAnswer}\n\n`
   }
@@ -283,13 +240,8 @@ const handleClose = () => {
 </script>
 
 <template>
-  <n-modal
-    :show="show"
-    preset="card"
-    style="width: 760px; max-width: 90vw; max-height: 90vh; overflow: auto"
-    :bordered="false"
-    @update:show="handleClose"
-  >
+  <n-modal :show="show" preset="card" style="width: 760px; max-width: 90vw; max-height: 90vh; overflow: auto"
+    :bordered="false" @update:show="handleClose">
     <template #header>
       <div style="display: flex; align-items: center; gap: 8px">
         <n-icon>
@@ -329,17 +281,12 @@ const handleClose = () => {
         </div>
         <n-radio-group v-model:value="singleAnswer" :disabled="submitted">
           <n-space vertical>
-            <n-radio
-              v-for="opt in singleQuestion.options"
-              :key="opt.label"
-              :value="opt.label"
-              :style="submitted ? {
-                color: opt.label === singleQuestion.correctAnswer ? '#10b981' :
-                       (opt.label === singleAnswer && !singleCorrect) ? '#ef4444' : undefined
-              } : {}"
-            >
+            <n-radio v-for="opt in singleQuestion.options" :key="opt.label" :value="opt.label" :style="submitted ? {
+              color: opt.label === singleQuestion.correctAnswer ? '#10b981' :
+                (opt.label === singleAnswer && !singleCorrect) ? '#ef4444' : undefined
+            } : {}">
               <span :style="submitted && opt.label === singleQuestion.correctAnswer ? 'color: #10b981; font-weight: 600' :
-                            submitted && opt.label === singleAnswer && !singleCorrect ? 'color: #ef4444' : ''">
+                submitted && opt.label === singleAnswer && !singleCorrect ? 'color: #ef4444' : ''">
                 {{ opt.label }}. {{ opt.text }}
               </span>
             </n-radio>
@@ -356,13 +303,10 @@ const handleClose = () => {
         </div>
         <n-checkbox-group v-model:value="multiAnswer" :disabled="submitted">
           <n-space vertical>
-            <n-checkbox
-              v-for="opt in multiQuestion.options"
-              :key="opt.label"
-              :value="opt.label"
-            >
-              <span :style="submitted && (multiQuestion.correctAnswer as string[]).includes(opt.label) ? 'color: #10b981; font-weight: 600' :
-                            submitted && multiAnswer.includes(opt.label) && !(multiQuestion.correctAnswer as string[]).includes(opt.label) ? 'color: #ef4444' : ''">
+            <n-checkbox v-for="opt in multiQuestion.options" :key="opt.label" :value="opt.label">
+              <span
+                :style="submitted && (multiQuestion.correctAnswer as string[]).includes(opt.label) ? 'color: #10b981; font-weight: 600' :
+                  submitted && multiAnswer.includes(opt.label) && !(multiQuestion.correctAnswer as string[]).includes(opt.label) ? 'color: #ef4444' : ''">
                 {{ opt.label }}. {{ opt.text }}
               </span>
             </n-checkbox>
@@ -371,17 +315,14 @@ const handleClose = () => {
       </div>
 
       <!-- 提交后显示对错结果 -->
-      <n-alert
-        v-if="submitted"
-        :type="allCorrect ? 'success' : 'error'"
-        style="margin: 16px 0"
-        :title="allCorrect ? '全部答对！' : '有错题'"
-      >
+      <n-alert v-if="submitted" :type="allCorrect ? 'success' : 'error'" style="margin: 16px 0"
+        :title="allCorrect ? '全部答对！' : '有错题'">
         <div v-if="singleQuestion && !singleCorrect">
           单选题：你的答案 {{ singleAnswer || '未作答' }}，正确答案 {{ singleQuestion.correctAnswer }}
         </div>
         <div v-if="multiQuestion && !multiCorrect">
-          多选题：你的答案 {{ multiAnswer.length ? multiAnswer.join('、') : '未作答' }}，正确答案 {{ (multiQuestion.correctAnswer as string[]).join('、') }}
+          多选题：你的答案 {{ multiAnswer.length ? multiAnswer.join('、') : '未作答' }}，正确答案 {{ (multiQuestion.correctAnswer as
+            string[]).join('、') }}
         </div>
       </n-alert>
 
@@ -392,53 +333,30 @@ const handleClose = () => {
           AI 深度评判报告
         </div>
         <n-spin v-if="aiJudging" size="small" />
-        <div
-          v-else
-          class="ai-result"
-          v-html="renderedAiResult"
-        />
+        <div v-else class="ai-result" v-html="renderedAiResult" />
       </div>
 
       <div style="display: flex; justify-content: center; gap: 12px; margin-top: 24px; flex-wrap: wrap">
         <!-- 提交前 -->
-        <n-button
-          v-if="!submitted"
-          type="primary"
-          size="large"
-          :disabled="!singleAnswer && multiAnswer.length === 0"
-          @click="handleCheck"
-        >
+        <n-button v-if="!submitted" type="primary" size="large" :disabled="!singleAnswer && multiAnswer.length === 0"
+          @click="handleCheck">
           提交答案
         </n-button>
 
         <!-- 提交后：AI 深度评判 -->
-        <n-button
-          v-if="submitted && isNormalMode && !aiJudging && !aiResult"
-          type="primary"
-          size="large"
-          @click="handleAiJudge"
-        >
+        <n-button v-if="submitted && isNormalMode && !aiJudging && !aiResult" type="primary" size="large"
+          @click="handleAiJudge">
           AI 深度评判
         </n-button>
 
         <!-- 降级模式：复制提示词 -->
-        <n-button
-          v-if="submitted && !isNormalMode"
-          type="primary"
-          size="large"
-          @click="handleCopyAiPrompt"
-        >
+        <n-button v-if="submitted && !isNormalMode" type="primary" size="large" @click="handleCopyAiPrompt">
           为我评判 (复制AI提示词)
         </n-button>
 
         <!-- AI 评判完成后：重新出题 -->
-        <n-button
-          v-if="submitted && isNormalMode && aiResult && !aiJudging"
-          secondary
-          type="info"
-          size="large"
-          @click="handleRegenerate"
-        >
+        <n-button v-if="submitted && isNormalMode && aiResult && !aiJudging" secondary type="info" size="large"
+          @click="handleRegenerate">
           重新出题
         </n-button>
 
@@ -449,23 +367,8 @@ const handleClose = () => {
     </template>
   </n-modal>
 
-  <!-- SSE Stream Modal -->
-  <n-modal
-    v-model:show="showStreamModal"
-    :mask-closable="false"
-    preset="card"
-    style="width: 680px; max-height: 80vh; overflow-y: auto;"
-    :closable="false"
-  >
-    <div v-if="reasoningText" class="modal-reasoning">
-      <div class="modal-section-label">思考过程</div>
-      <pre ref="reasoningPreRef" class="modal-reasoning-content">{{ reasoningText }}</pre>
-    </div>
-    <div class="modal-output">
-      <div class="modal-section-label">模型输出</div>
-      <pre ref="outputPreRef" class="modal-output-content">{{ streamingText || '正在等待模型响应...' }}</pre>
-    </div>
-  </n-modal>
+  <SseStreamModal v-model:show="showStreamModal" :streaming-text="streamingText" :reasoning-text="reasoningText"
+    :blur="blurStream" />
 </template>
 
 <style scoped>
@@ -528,48 +431,5 @@ const handleClose = () => {
   padding: 12px;
   border-radius: 8px;
   overflow-x: auto;
-}
-
-.modal-reasoning {
-  margin-bottom: 16px;
-}
-
-.modal-section-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #94a3b8;
-  margin-bottom: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.modal-reasoning-content {
-  background: #ffffff;
-  padding: 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  line-height: 1.7;
-  color: #475569;
-  max-height: 200px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  margin: 0;
-  border: 1px solid #e2e8f0;
-}
-
-.modal-output-content {
-  background: #f8fafc;
-  padding: 12px;
-  border-radius: 8px;
-  font-size: 14px;
-  line-height: 1.7;
-  color: #334155;
-  max-height: 400px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  margin: 0;
-  border: 1px solid #e2e8f0;
 }
 </style>
