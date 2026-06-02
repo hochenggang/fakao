@@ -6,49 +6,37 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/',
     component: MainLayout,
-    redirect: '/overview',
+    redirect: '/practice',
     children: [
+      {
+        path: 'practice',
+        name: 'Practice',
+        component: () => import('@/views/PracticeView.vue'),
+        meta: { title: '法考演练', index: 1 }
+      },
       {
         path: 'overview',
         name: 'Overview',
         component: () => import('@/views/OverviewView.vue'),
-        meta: { title: '如何考？', index: 1 }
-      },
-      {
-        path: 'objective/paper1',
-        name: 'ObjectivePaper1',
-        component: () => import('@/views/ObjectiveView.vue'),
-        meta: { title: '客观题 · 卷一（公法）', index: 2, paper: 'paper1' }
-      },
-      {
-        path: 'objective/paper2',
-        name: 'ObjectivePaper2',
-        component: () => import('@/views/ObjectiveView.vue'),
-        meta: { title: '客观题 · 卷二（私法）', index: 3, paper: 'paper2' }
-      },
-      {
-        path: 'subjective',
-        name: 'Subjective',
-        component: () => import('@/views/SubjectiveView.vue'),
-        meta: { title: '主观题案例演练', index: 4 }
+        meta: { title: '如何考？', index: 2 }
       },
       {
         path: 'wrongbook',
         name: 'WrongBook',
         component: () => import('@/views/WrongBookView.vue'),
-        meta: { title: '错题集', index: 5 }
+        meta: { title: '错题集', index: 3 }
       },
       {
         path: 'outline-notes',
         name: 'OutlineNotes',
         component: () => import('@/views/OutlineNotesView.vue'),
-        meta: { title: '大纲笔记', index: 6 }
+        meta: { title: '大纲笔记', index: 4 }
       },
       {
         path: 'settings',
         name: 'Settings',
         component: () => import('@/views/SettingsView.vue'),
-        meta: { title: '设置', index: 7 }
+        meta: { title: '设置', index: 5 }
       }
     ]
   }

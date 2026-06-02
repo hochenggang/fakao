@@ -1,45 +1,59 @@
-import { getPrompt } from './usePromptStore'
-import type { ProviderConfig, ChatMessage, StreamCallbacks } from '@/types'
+import type { ChatMessage, ProviderConfig, ModelConfig } from '@/types'
 
-export function useAiCall() {
-  function getUrl(provider: ProviderConfig): string {
-    return provider.baseUrl.replace(/\/+$/, '')
-  }
+export interface StreamOptions {
+  onChunk?: (chunk: string, full: string) => void
+  onFinish?: (full: string) => void
+  onThinking?: (chunk: string, full: string) => void
+  thinking?: boolean
+  signal?: AbortSignal
+}
 
-  function validate(provider: ProviderConfig, model: string | null): void {
-    if (!provider?.baseUrl || !provider?.apiKey) {
-      throw new Error('请先在设置中配置 API 信息')
-    }
-    if (!model) {
-      throw new Error('请选择模型')
-    }
-  }
-
-  function prependSystem(messages: ChatMessage[]): ChatMessage[] {
-    const systemPrompt = getPrompt('system')
-    return [
-      { role: 'system', content: systemPrompt },
-      ...messages,
-    ]
-  }
-
-  function buildBody(
+export interface RawAiCall {
+  streamChat: (
+    provider: ProviderConfig,
     model: string,
     messages: ChatMessage[],
-    { thinking }: { thinking?: boolean } = {}
-  ): Record<string, unknown> {
-    const body: Record<string, unknown> = { model, messages, temperature: 0.8 }
-    if (thinking) {
-      body.thinking = { type: 'enabled', reasoning_effort: 'high' }
-    }
-    return body
-  }
-
-  async function chat(
+    opts: StreamOptions
+  ) => Promise<string>
+  chat: (
     provider: ProviderConfig,
     model: string,
     messages: ChatMessage[],
     opts?: { thinking?: boolean }
+  ) => Promise<string>
+}
+
+function getUrl(provider: ProviderConfig): string {
+  return provider.baseUrl.replace(/\/+$/, '')
+}
+
+function validate(provider: ProviderConfig, model: string): void {
+  if (!provider?.baseUrl || !provider?.apiKey) {
+    throw new Error('请先在设置中配置 API 信息')
+  }
+  if (!model) {
+    throw new Error('请选择模型')
+  }
+}
+
+function buildBody(
+  model: string,
+  messages: ChatMessage[],
+  { thinking }: { thinking?: boolean } = {}
+): Record<string, unknown> {
+  const body: Record<string, unknown> = { model, messages, temperature: 0.8 }
+  if (thinking) {
+    body.thinking = { type: 'enabled', reasoning_effort: 'high' }
+  }
+  return body
+}
+
+export function useAiCallRaw(): RawAiCall {
+  async function chat(
+    provider: ProviderConfig,
+    model: string,
+    messages: ChatMessage[],
+    opts: { thinking?: boolean } = {}
   ): Promise<string> {
     validate(provider, model)
 
@@ -49,7 +63,7 @@ export function useAiCall() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${provider.apiKey}`,
       },
-      body: JSON.stringify(buildBody(model, prependSystem(messages), opts)),
+      body: JSON.stringify(buildBody(model, messages, opts)),
     })
 
     if (!res.ok) {
@@ -57,7 +71,7 @@ export function useAiCall() {
       throw new Error(`API 请求失败: ${res.status} ${err}`)
     }
 
-    const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> }
+    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> }
     return data.choices?.[0]?.message?.content || ''
   }
 
@@ -65,11 +79,11 @@ export function useAiCall() {
     provider: ProviderConfig,
     model: string,
     messages: ChatMessage[],
-    { onChunk, onFinish, onThinking, thinking }: StreamCallbacks = {}
+    { onChunk, onFinish, onThinking, thinking, signal }: StreamOptions = {}
   ): Promise<string> {
     validate(provider, model)
 
-    const body = { ...buildBody(model, prependSystem(messages), { thinking }), stream: true }
+    const body = { ...buildBody(model, messages, { thinking }), stream: true }
 
     const res = await fetch(getUrl(provider), {
       method: 'POST',
@@ -78,6 +92,7 @@ export function useAiCall() {
         'Authorization': `Bearer ${provider.apiKey}`,
       },
       body: JSON.stringify(body),
+      signal,
     })
 
     if (!res.ok) {
@@ -132,5 +147,7 @@ export function useAiCall() {
     return fullText
   }
 
-  return { chat, streamChat }
+  return { streamChat, chat }
 }
+
+export type { ModelConfig }

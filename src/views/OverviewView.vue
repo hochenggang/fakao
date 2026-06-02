@@ -1,7 +1,25 @@
 <script setup lang="ts">
-const papers = [
+import { useRouter } from 'vue-router'
+import type { ExamId } from '@/types/exam'
+
+const router = useRouter()
+
+const papers: Array<{
+  id: string
+  examId: ExamId
+  badge: string
+  badgeClass: string
+  title: string
+  time: string
+  questionType: string
+  questionTypeClass: string
+  labelClass: string
+  tagClass: string
+  subjects: Array<{ name: string; subjectId: string }>
+}> = [
   {
     id: 'paper1',
+    examId: 'exam1',
     badge: '上午场',
     badgeClass: 'badge-morning',
     title: '试卷一（公法卷）',
@@ -10,10 +28,21 @@ const papers = [
     questionTypeClass: 'qt-default',
     labelClass: 'label-default',
     tagClass: 'tag-default',
-    subjects: ['法治思想', '法理学', '宪法', '中国法律史', '国际法', '司法制度和法律职业道德', '刑法', '刑事诉讼法', '行政法与行政诉讼法']
+    subjects: [
+      { name: '法治思想', subjectId: 'legal-thought' },
+      { name: '法理学', subjectId: 'jurisprudence' },
+      { name: '宪法', subjectId: 'constitution' },
+      { name: '中国法律史', subjectId: 'legal-history' },
+      { name: '国际法', subjectId: 'international-law' },
+      { name: '司法制度和法律职业道德', subjectId: 'judicial-ethics' },
+      { name: '刑法', subjectId: 'criminal-law' },
+      { name: '刑事诉讼法', subjectId: 'criminal-procedure' },
+      { name: '行政法与行政诉讼法', subjectId: 'administrative-law' }
+    ]
   },
   {
     id: 'paper2',
+    examId: 'exam2',
     badge: '下午场',
     badgeClass: 'badge-afternoon',
     title: '试卷二（私法卷）',
@@ -22,10 +51,21 @@ const papers = [
     questionTypeClass: 'qt-default',
     labelClass: 'label-default',
     tagClass: 'tag-default',
-    subjects: ['民法', '知识产权法', '商法', '经济法', '环境资源法', '劳动与社会保障法', '国际私法', '国际经济法', '民事诉讼法（含仲裁制度）']
+    subjects: [
+      { name: '民法', subjectId: 'civil-law' },
+      { name: '知识产权法', subjectId: 'ip-law' },
+      { name: '商法', subjectId: 'commercial-law' },
+      { name: '经济法', subjectId: 'economic-law' },
+      { name: '环境资源法', subjectId: 'environment-law' },
+      { name: '劳动与社会保障法', subjectId: 'labor-law' },
+      { name: '国际私法', subjectId: 'private-intl-law' },
+      { name: '国际经济法', subjectId: 'intl-economic-law' },
+      { name: '民事诉讼法（含仲裁制度）', subjectId: 'civil-procedure' }
+    ]
   },
   {
     id: 'subjective',
+    examId: 'exam3',
     badge: '上午场',
     badgeClass: 'badge-subjective',
     title: '主观题试卷',
@@ -34,9 +74,24 @@ const papers = [
     questionTypeClass: 'qt-amber',
     labelClass: 'label-amber',
     tagClass: 'tag-amber',
-    subjects: ['法治思想', '法理学', '宪法', '刑法', '刑事诉讼法', '民法', '商法', '民事诉讼法（含仲裁制度）', '行政法与行政诉讼法', '司法制度和法律职业道德']
+    subjects: [
+      { name: '法治思想', subjectId: 'legal-thought' },
+      { name: '法理学', subjectId: 'jurisprudence' },
+      { name: '宪法', subjectId: 'constitution' },
+      { name: '刑法', subjectId: 'criminal-law' },
+      { name: '刑事诉讼法', subjectId: 'criminal-procedure' },
+      { name: '民法', subjectId: 'civil-law' },
+      { name: '商法', subjectId: 'commercial-law' },
+      { name: '民事诉讼法（含仲裁制度）', subjectId: 'civil-procedure' },
+      { name: '行政法与行政诉讼法', subjectId: 'administrative-law' },
+      { name: '司法制度和法律职业道德', subjectId: 'judicial-ethics' }
+    ]
   }
 ]
+
+function goToPractice(examId: ExamId, subjectId: string) {
+  router.push({ path: '/practice', query: { examId, subjectId } })
+}
 </script>
 
 <template>
@@ -104,10 +159,12 @@ const papers = [
               <div class="tags-wrap">
                 <span
                   v-for="subject in paper.subjects"
-                  :key="subject"
-                  :class="['subject-tag', paper.tagClass]"
+                  :key="subject.subjectId"
+                  :class="['subject-tag', paper.tagClass, 'subject-tag-clickable']"
+                  :title="`跳转到 ${subject.name} 演练`"
+                  @click="goToPractice(paper.examId, subject.subjectId)"
                 >
-                  {{ subject }}
+                  {{ subject.name }}
                 </span>
               </div>
             </div>
@@ -414,6 +471,20 @@ const papers = [
   font-size: 12px;
   padding: 4px 10px;
   border-radius: 4px;
+}
+
+.subject-tag-clickable {
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
+}
+.subject-tag-clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  filter: brightness(0.97);
+}
+.subject-tag-clickable:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 .tag-default {

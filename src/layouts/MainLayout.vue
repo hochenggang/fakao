@@ -3,14 +3,14 @@ import { ref, onMounted, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NLayout, NLayoutSider, NLayoutContent,
-  NMenu, NButton, NTooltip
+  NMenu, NButton, NTooltip, NIcon
 } from 'naive-ui'
 import type { MenuOption } from 'naive-ui'
 import {
   ChevronLeft16Regular, ChevronRight16Regular,
-  Home16Regular, DocumentOnePage20Regular,
+  Home16Regular, VehicleSubway20Regular,
   Settings16Regular, Notebook24Regular, NotebookError24Regular,
-  BookOpen24Regular
+  ContentView20Regular
 } from '@vicons/fluent'
 
 const route = useRoute()
@@ -30,22 +30,12 @@ const toggleCollapse = () => {
 const menuOptions: MenuOption[] = [
   {
     key: '/overview',
-    label: '如何考？',
-    icon: () => h(Home16Regular)
+    label: '总览',
+    icon: () => h(VehicleSubway20Regular)
   },
   {
-    key: '/objective/paper1',
-    label: '客观题 · 卷一',
-    icon: () => h(Notebook24Regular)
-  },
-  {
-    key: '/objective/paper2',
-    label: '客观题 · 卷二',
-    icon: () => h(Notebook24Regular)
-  },
-  {
-    key: '/subjective',
-    label: '主观题',
+    key: '/practice',
+    label: '演练',
     icon: () => h(Notebook24Regular)
   },
   {
@@ -56,7 +46,7 @@ const menuOptions: MenuOption[] = [
   {
     key: '/outline-notes',
     label: '大纲',
-    icon: () => h(Notebook24Regular)
+    icon: () => h(ContentView20Regular)
   },
   {
     key: '/settings',
@@ -77,7 +67,7 @@ const handleMenuUpdate = (key: string) => {
       <div style="height: 100%; display: flex; flex-direction: column">
         <div
           style="height: 64px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #f0f0f0">
-          <n-icon :style="{ marginRight: collapsed ? '0' : '8px'  }" :size="30">
+          <n-icon :style="{ marginRight: collapsed ? '0' : '8px' }" :size="30">
             <svg t="1780293868339" class="icon" viewBox="0 0 1024 1024" version="1.1" width="30" height="30"
               xmlns="http://www.w3.org/2000/svg">
               <path

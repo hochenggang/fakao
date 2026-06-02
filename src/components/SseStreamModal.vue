@@ -36,7 +36,7 @@ watch(() => props.reasoningText, () => {
     :show="show"
     :mask-closable="false"
     preset="card"
-    style="width: 680px; max-height: 80vh; overflow-y: auto;"
+    style="width: 680px; max-height: 60vh; overflow-y: auto;"
     :closable="false"
     @update:show="$emit('update:show', $event)"
   >
@@ -45,7 +45,7 @@ watch(() => props.reasoningText, () => {
       <pre ref="reasoningPreRef" class="modal-reasoning-content" :class="{ 'blur-text': blur }">{{ reasoningText }}</pre>
     </div>
     <div class="modal-output">
-      <div class="modal-section-label">模型输出</div>
+      <div class="modal-section-label">等待模型输出...</div>
       <pre ref="outputPreRef" class="modal-output-content" :class="{ 'blur-text': blur }">{{ streamingText || '正在等待模型响应...' }}</pre>
     </div>
   </n-modal>
@@ -72,7 +72,7 @@ watch(() => props.reasoningText, () => {
   font-size: 13px;
   line-height: 1.7;
   color: #475569;
-  max-height: 200px;
+  max-height: 20vh;
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
@@ -87,7 +87,7 @@ watch(() => props.reasoningText, () => {
   font-size: 14px;
   line-height: 1.7;
   color: #334155;
-  max-height: 400px;
+  max-height: 20vh;
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;

@@ -1,141 +1,85 @@
 import { computed } from 'vue'
-import { examOutline } from '@/data/subjects'
+import { exams } from '@/data/exams'
+import type { ExamId } from '@/types/exam'
 import { usePracticeTracker } from './usePracticeTracker'
-import type { Subject } from '@/types'
 
-export interface PracticeCountTree {
+export interface PracticeCountNode {
   id: string
   name: string
   count: number
-  children?: PracticeCountTree[]
+  children?: PracticeCountNode[]
 }
 
-function buildSubjectCount(
-  subject: Subject,
-  type: 'objective' | 'subjective',
-  getTopicCount: (subjectId: string, topicId: string, type: 'objective' | 'subjective') => number
-): PracticeCountTree {
-  const topicCounts = subject.topics.map(topic => ({
-    id: topic.id,
-    name: topic.name,
-    count: getTopicCount(subject.id, topic.id, type)
-  }))
-
-  const totalCount = topicCounts.reduce((sum, t) => sum + t.count, 0)
-
-  return {
-    id: subject.id,
-    name: subject.name,
-    count: totalCount,
-    children: topicCounts
-  }
+function sumCount(children: PracticeCountNode[]): number {
+  return children.reduce((s, c) => s + (c.count + (c.children ? sumCount(c.children) : 0)), 0)
 }
 
 export function usePracticeCount() {
-  const { getCount: getPracticeCount } = usePracticeTracker()
+  const { getCount: getTopicCount, getSubjectCount: getAllTopicCountBySubject } = usePracticeTracker()
 
-  const objectivePaper1Count = computed(() => {
-    const subjects = examOutline.children.objective.children.paper1.children
-    const subjectCounts = subjects.map(s => buildSubjectCount(s, 'objective', getPracticeCount))
-    const totalCount = subjectCounts.reduce((sum, s) => sum + s.count, 0)
+  const kindOf = (examId: ExamId) => (examId === 'exam3' ? 'subjective' as const : 'objective' as const)
 
+  function getSubjectCount(subjectId: string, kind: 'objective' | 'subjective'): number {
+    return getAllTopicCountBySubject(subjectId, kind)
+  }
+
+  function getExamCount(examId: ExamId): number {
+    const exam = exams.find(e => e.id === examId)
+    if (!exam) return 0
+    const kind = kindOf(examId)
+    return exam.subjects.reduce((sum, s) => sum + getSubjectCount(s.id, kind), 0)
+  }
+
+  const tree = computed<PracticeCountNode>(() => {
+    const children: PracticeCountNode[] = exams.map(e => {
+      const kind = kindOf(e.id)
+      const subjectNodes: PracticeCountNode[] = e.subjects.map(s => {
+        const topicNodes: PracticeCountNode[] = s.topics.map(t => ({
+          id: t.id,
+          name: t.name,
+          count: getTopicCount(s.id, t.id, kind),
+        }))
+        return {
+          id: s.id,
+          name: s.name,
+          count: topicNodes.reduce((sum, t) => sum + t.count, 0),
+          children: topicNodes,
+        }
+      })
+      return {
+        id: e.id,
+        name: e.name,
+        count: subjectNodes.reduce((sum, s) => sum + s.count, 0),
+        children: subjectNodes,
+      }
+    })
     return {
-      id: 'paper1',
-      name: '卷一（公法卷）',
-      count: totalCount,
-      children: subjectCounts
-    }
-  })
-
-  const objectivePaper2Count = computed(() => {
-    const subjects = examOutline.children.objective.children.paper2.children
-    const subjectCounts = subjects.map(s => buildSubjectCount(s, 'objective', getPracticeCount))
-    const totalCount = subjectCounts.reduce((sum, s) => sum + s.count, 0)
-
-    return {
-      id: 'paper2',
-      name: '卷二（私法卷）',
-      count: totalCount,
-      children: subjectCounts
+      id: 'root',
+      name: '法考大纲',
+      count: sumCount(children),
+      children,
     }
   })
 
   const objectiveCount = computed(() => {
-    const paper1 = objectivePaper1Count.value
-    const paper2 = objectivePaper2Count.value
-
-    return {
-      id: 'objective',
-      name: '客观题',
-      count: paper1.count + paper2.count,
-      children: [paper1, paper2]
-    }
+    return getExamCount('exam1') + getExamCount('exam2')
   })
 
-  const subjectiveCount = computed(() => {
-    const subjects = examOutline.children.subjective.children
-    const subjectCounts = subjects.map(s => buildSubjectCount(s, 'subjective', getPracticeCount))
-    const totalCount = subjectCounts.reduce((sum, s) => sum + s.count, 0)
+  const subjectiveCount = computed(() => getExamCount('exam3'))
 
-    return {
-      id: 'subjective',
-      name: '主观题',
-      count: totalCount,
-      children: subjectCounts
-    }
-  })
+  const totalCount = computed(() => objectiveCount.value + subjectiveCount.value)
 
-  const totalCount = computed(() => {
-    return objectiveCount.value.count + subjectiveCount.value.count
-  })
-
-  const practiceCountTree = computed(() => {
-    return {
-      id: 'fakao-outline-practice',
-      name: '练习统计',
-      count: totalCount.value,
-      children: [objectiveCount.value, subjectiveCount.value]
-    }
-  })
-
-  function getSubjectCount(subjectId: string, type: 'objective' | 'subjective'): number {
-    const allSubjects = [
-      ...examOutline.children.objective.children.paper1.children,
-      ...examOutline.children.objective.children.paper2.children,
-      ...examOutline.children.subjective.children
-    ]
-
-    const subject = allSubjects.find(s => s.id === subjectId)
-    if (!subject) return 0
-
-    return subject.topics.reduce((sum, topic) => sum + getPracticeCount(subjectId, topic.id, type), 0)
-  }
-
-  function getPaperCount(paperId: 'paper1' | 'paper2'): number {
-    if (paperId === 'paper1') {
-      return objectivePaper1Count.value.count
-    }
-    return objectivePaper2Count.value.count
-  }
-
-  function getObjectiveTotalCount(): number {
-    return objectiveCount.value.count
-  }
-
-  function getSubjectiveTotalCount(): number {
-    return subjectiveCount.value.count
+  function getTopicPracticeCount(subjectId: string, topicId: string, kind: 'objective' | 'subjective'): number {
+    return getTopicCount(subjectId, topicId, kind)
   }
 
   return {
-    practiceCountTree,
+    tree,
     objectiveCount,
     subjectiveCount,
-    objectivePaper1Count,
-    objectivePaper2Count,
     totalCount,
     getSubjectCount,
-    getPaperCount,
-    getObjectiveTotalCount,
-    getSubjectiveTotalCount
+    getExamCount,
+    getTopicPracticeCount,
   }
 }
