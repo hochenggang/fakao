@@ -1,7 +1,7 @@
 {
-  "name": "trae-project",
+  "name": "fakao",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -38,6 +38,7 @@
     "unplugin-vue-dev-locator": "^1.0.0",
     "vite": "^5.0.12",
     "vite-plugin-trae-solo-badge": "^1.0.0",
+    "vue-llm-stream-chat": "^0.1.2",
     "vue-tsc": "^1.8.27"
   }
 }

@@ -1,7 +1,7 @@
 import { type Ref } from 'vue'
 import type { ExamId, Subject, Topic } from '@/types/exam'
 import type { JsonShape } from './llm/json'
-import { useLLM } from './llm/provider'
+import { useLLM } from './llm'
 import { buildPrompt } from './usePromptStore'
 import { useRuntimeMode } from './useRuntimeMode'
 import { examById } from '@/data/exams'
@@ -13,6 +13,7 @@ export interface ObjectiveOption {
   label: string
   text: string
 }
+
 
 export interface ObjectiveSingleQ {
   question: string

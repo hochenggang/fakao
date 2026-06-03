@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, toRef } from 'vue'
 import {
-  NModal, NSpin, NAlert, NButton, NInput, NRadio, NRadioGroup, NCheckbox, NCheckboxGroup,
-  NDivider, NTag, NSpace, useMessage, NIcon, NEmpty
+  NModal, NAlert, NButton, NInput, NRadio, NRadioGroup, NCheckbox, NCheckboxGroup,
+  NDivider, NTag, NSpace, useMessage, NIcon
 } from 'naive-ui'
 import { Edit16Regular } from '@vicons/fluent'
 import { marked } from 'marked'
@@ -42,7 +42,6 @@ const { record: recordPractice } = usePracticeTracker()
 const isSubjective = computed(() => props.examId === 'exam3')
 const kind = computed<'objective' | 'subjective'>(() => (isSubjective.value ? 'subjective' : 'objective'))
 
-const generating = ref(false)
 const judging = ref(false)
 const submitted = ref(false)
 const error = ref('')
@@ -59,6 +58,10 @@ const multiAnswer = ref<string[]>([])
 const subjectiveAnswer = ref('')
 
 const aiResult = ref<JudgeOut | null>(null)
+
+const displayed = computed(() =>
+  props.show && (!!singleQ.value || !!multiQ.value || !!subjectiveQ.value || !!error.value)
+)
 
 const singleCorrect = computed(() => {
   if (!singleQ.value || !singleAnswer.value) return false
@@ -87,7 +90,6 @@ const score = computed(() => aiResult.value?.score)
 
 function reset() {
   error.value = ''
-  generating.value = false
   judging.value = false
   submitted.value = false
   singleQ.value = null
@@ -102,7 +104,6 @@ function reset() {
 }
 
 async function doGenerate() {
-  generating.value = true
   error.value = ''
   try {
     const out = await flow.generate(props.subject, props.topic, props.scope)
@@ -121,8 +122,6 @@ async function doGenerate() {
     }
   } catch (e: any) {
     error.value = `出题失败：${e?.message || '未知错误'}`
-  } finally {
-    generating.value = false
   }
 }
 
@@ -225,7 +224,7 @@ function handleClose() {
 </script>
 
 <template>
-  <n-modal :show="show" preset="card" :style="isSubjective
+  <n-modal :show="displayed" preset="card" :style="isSubjective
     ? 'width: 840px; max-width: 90vw; max-height: 90vh; overflow: auto'
     : 'width: 760px; max-width: 90vw; max-height: 90vh; overflow: auto'" :bordered="false"
     @update:show="handleClose">
@@ -238,16 +237,8 @@ function handleClose() {
       </div>
     </template>
 
-    <!-- 生成中 -->
-    <div v-if="generating" style="display: flex; flex-direction: column; align-items: center; padding: 40px 0">
-      <n-spin size="medium" />
-      <div style="margin-top: 16px; color: #64748b; font-size: 14px">
-        AI 正在为您生成{{ isSubjective ? '案例题目' : '题目' }}，请稍候...
-      </div>
-    </div>
-
     <!-- 错误 -->
-    <n-alert v-else-if="error" type="error" style="margin-bottom: 16px">
+    <n-alert v-if="error" type="error" style="margin-bottom: 16px">
       {{ error }}
       <div v-if="!isNormalMode" style="margin-top: 8px; font-size: 12px">
         请前往「设置」配置 AI 大语言模型。
@@ -403,11 +394,6 @@ function handleClose() {
         <n-button size="large" @click="handleClose">关闭</n-button>
       </div>
     </template>
-
-    <div v-else style="display: flex; flex-direction: column; align-items: center; padding: 40px 0">
-      <n-spin v-if="generating" />
-      <n-empty v-else description="正在准备题目..." />
-    </div>
   </n-modal>
 </template>
 

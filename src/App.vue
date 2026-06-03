@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { NDialogProvider, NMessageProvider, NNotificationProvider } from 'naive-ui'
-import AiSseProvider from '@/components/AiSseProvider.vue'
+import { StreamChatModalProvider } from 'vue-llm-stream-chat'
+import 'vue-llm-stream-chat/style'
+
 </script>
 
 <template>
-  <AiSseProvider>
-    <n-dialog-provider>
-      <n-message-provider>
-        <n-notification-provider>
+  <n-dialog-provider>
+    <n-message-provider>
+      <n-notification-provider>
+        <StreamChatModalProvider>
           <router-view />
-        </n-notification-provider>
-      </n-message-provider>
-    </n-dialog-provider>
-  </AiSseProvider>
+        </StreamChatModalProvider>
+      </n-notification-provider>
+    </n-message-provider>
+  </n-dialog-provider>
 </template>
