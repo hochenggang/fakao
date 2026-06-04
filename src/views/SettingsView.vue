@@ -82,6 +82,21 @@
             <n-button size="small" secondary type="primary" @click="handleAddProvider">
               + 添加供应商
             </n-button>
+
+            <!-- 在此增加一个 默认模型的选项，把所有的 供应商+'-'+模型 都列出来，程序的使用过程中，直接调用选定的模型。 -->
+            <div v-if="defaultModelOptions.length" class="default-model-row">
+              <span class="default-model-label">默认模型：</span>
+              <n-select
+                size="small"
+                :value="defaultModelValue"
+                :options="defaultModelOptions"
+                placeholder="选择默认调用的模型"
+                filterable
+                style="width: 280px"
+                @update:value="onDefaultModelChange"
+              />
+            </div>
+
           </div>
 
           <n-alert :show-icon="false" type="info" :style="{ maxWidth: '640px', margin: '12px 0' }">
@@ -177,7 +192,7 @@ import type { InputInst } from 'naive-ui'
 import {
   NForm, NFormItem, NInput, NButton, NCollapse,
   NCollapseItem, NSwitch, NEmpty, NIcon, NAlert, NPopconfirm,
-  NTabs, NTabPane, NCard,
+  NTabs, NTabPane, NCard, NSelect,
 } from 'naive-ui'
 import { TrashOutline, AddOutline } from '@vicons/ionicons5'
 import { useSettings } from '@/composables/useSettings'
@@ -185,12 +200,42 @@ import { usePromptStore } from '@/composables/usePromptStore'
 import { useWrongBook } from '@/composables/useWrongBook'
 import type { PromptKey } from '@/types'
 
-const { settings, addProvider, removeProvider, addModel, removeModel } = useSettings()
+const { settings, addProvider, removeProvider, addModel, removeModel, setDefaultModel } = useSettings()
 const { custom, defaults, removeCustom, hasCustom } = usePromptStore()
 const { items: wrongBookItems, clear: clearWrongBook } = useWrongBook()
 
 const objectiveCount = computed(() => wrongBookItems.value.filter(i => i.type === 'objective').length)
 const subjectiveCount = computed(() => wrongBookItems.value.filter(i => i.type === 'subjective').length)
+
+const defaultModelOptions = computed(() => {
+  const opts: Array<{ label: string; value: string }> = []
+  for (const p of settings.value.providers) {
+    if (!p.baseUrl.trim() || !p.apiKey.trim()) continue
+    const providerLabel = p.name.trim() || '未命名供应商'
+    for (const m of p.models) {
+      if (!m.name.trim()) continue
+      opts.push({
+        label: `${providerLabel} - ${m.name}`,
+        value: `${p.id}:${m.name}`,
+      })
+    }
+  }
+  return opts
+})
+
+const defaultModelValue = computed(() => {
+  const def = settings.value.defaultModel
+  if (!def) return null
+  return `${def.providerId}:${def.modelName}`
+})
+
+function onDefaultModelChange(v: string) {
+  const idx = v.indexOf(':')
+  if (idx < 0) return
+  const providerId = v.slice(0, idx)
+  const modelName = v.slice(idx + 1)
+  setDefaultModel(providerId, modelName)
+}
 
 const expandedNames = ref<string[]>([])
 const nameInputRefs = ref<Record<string, InputInst>>({})
@@ -225,7 +270,8 @@ function handleAddProvider() {
 }
 
 onMounted(() => {
-  if (settings.value.providers.length === 1) {
+  // 如果只有一个供应商，且没有模型，就默认展开第一个供应商, 提示用户添加模型
+  if (settings.value.providers.length === 1 && settings.value.providers[0].models.length === 0) {
     const id = settings.value.providers[0].id
     expandAndFocus(id)
   }
@@ -252,8 +298,22 @@ function onResetPrompt(key: PromptKey) {
 .tab-header {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   margin-top: 14px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.default-model-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.default-model-label {
+  font-size: 13px;
+  color: #475569;
+  white-space: nowrap;
 }
 
 .provider-form {

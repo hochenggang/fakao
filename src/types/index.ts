@@ -13,8 +13,14 @@ export interface ProviderConfig {
   models: ModelConfig[]
 }
 
+export interface DefaultModel {
+  providerId: string
+  modelName: string
+}
+
 export interface Settings {
   providers: ProviderConfig[]
+  defaultModel?: DefaultModel
 }
 
 export interface ChatMessage {

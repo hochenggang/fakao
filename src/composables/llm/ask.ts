@@ -15,15 +15,12 @@ export interface AskOptions {
 
 export function useLLM() {
   const { streamChat } = useStreamChat()
-  const { settings } = useSettings()
+  const { resolveDefaultModel } = useSettings()
 
   function pickProvider() {
-    const p = settings.value.providers.find(
-      x => x.baseUrl.trim() && x.apiKey.trim() && x.models.some(m => m.name.trim())
-    )
-    if (!p) throw new Error('请先在设置中配置 API 信息')
-    const m = p.models.find(m => m.name.trim())!
-    return { baseUrl: p.baseUrl, apiKey: p.apiKey, model: m.name }
+    const picked = resolveDefaultModel()
+    if (!picked) throw new Error('请先在设置中配置 API 信息')
+    return picked
   }
 
   async function ask<T>(opts: AskOptions): Promise<T> {
