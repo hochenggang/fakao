@@ -168,6 +168,39 @@ export const DEFAULT_PROMPTS: Record<PromptKey, string> = {
 {examSubjectsJson}
 \`\`\`
 如上方为整卷演练，请从以上 subject 列表中任选其一，从该 subject 的 topic 列表中任选一个作为本次出题目标。`,
+
+  'keyword-memo': `你是中国国家统一法律职业资格考试（法考）辅导名师。
+请围绕【科目】{subject}、【考点】{topic}、【关键词】{keyword}，输出一段「考点必背」纯文本。
+
+【要求】:
+1. 简洁、结构清晰、便于背诵（不超过 300 字）。
+2. 包含核心概念 + 关键构成要件 + 易混淆点 + 一句秒杀口诀。
+3. 不要输出 JSON、不要代码块标记、不要 Markdown 标题。
+4. 用换行分段即可。
+
+【相关法考大纲知识】:
+\`\`\`markdown
+{knowledgeContext}
+\`\`\``,
+
+  'keyword-evaluate': `你是法考辅导阅卷专家。学生在默写"考点必背"时可能漏点、错点或加入自己的理解。
+请对学生默写进行精准评析。
+
+【科目】{subject}
+【考点】{topic}
+【关键词】{keyword}
+【原必背内容】:
+{memoText}
+
+【学生默写】:
+{userRecall}
+
+【评析要求】:
+1. 漏点清单：逐条列出原必背中出现但学生漏掉的内容。
+2. 错点清单：学生写错或有偏差之处。
+3. 加分项：学生补充得当、值得肯定的内容。
+4. 综合点评：一段简短的鼓励 + 改进建议。
+5. 不要输出 JSON、不要代码块标记、不要 Markdown 标题，仅输出纯文本（用换行分段）。`,
 }
 
 function load(): Partial<Record<PromptKey, string>> {

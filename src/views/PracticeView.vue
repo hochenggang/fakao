@@ -13,6 +13,7 @@ import { usePracticeTracker } from '@/composables/usePracticeTracker'
 import { usePracticeCount } from '@/composables/usePracticeCount'
 import { kindOf, type PracticeScope } from '@/composables/usePracticeFlow'
 import PracticeModal from '@/components/PracticeModal.vue'
+import KeywordMemorizeModal from '@/components/KeywordMemorizeModal.vue'
 import TopicCard from '@/components/TopicCard.vue'
 
 const route = useRoute()
@@ -40,6 +41,22 @@ const modal = ref<ModalState>({
   subject: FALLBACK_SUBJECT,
   topic: FALLBACK_TOPIC,
   scope: 'topic',
+})
+
+interface KeywordModalState {
+  show: boolean
+  openKey: number
+  subject: Subject
+  topic: Topic
+  keyword: string
+}
+
+const keywordModal = ref<KeywordModalState>({
+  show: false,
+  openKey: 0,
+  subject: FALLBACK_SUBJECT,
+  topic: FALLBACK_TOPIC,
+  keyword: '',
 })
 
 const openKey = ref(0)
@@ -128,6 +145,20 @@ function onModalPracticeRecorded(subjectId: string, topicId: string) {
 
 function onModalClose() {
   modal.value.show = false
+}
+
+function onKeywordModalClose() {
+  keywordModal.value.show = false
+}
+
+function openKeywordMemo(subject: Subject, topic: Topic, keyword: string) {
+  keywordModal.value = {
+    show: true,
+    openKey: keywordModal.value.openKey + 1,
+    subject,
+    topic,
+    keyword,
+  }
 }
 
 function onTopicPractice(subject: Subject, topicId: string) {
@@ -243,6 +274,7 @@ function onTopicPractice(subject: Subject, topicId: string) {
             :practiced-count="getTopicPracticeCount(subject.id, topic.id, currentKind)"
             :is-normal-mode="isNormalMode"
             @practice="(sId, tId) => onTopicPractice(subject, tId)"
+            @memorize="(kw) => openKeywordMemo(subject, topic, kw)"
           />
         </div>
       </n-collapse-item>
@@ -257,6 +289,15 @@ function onTopicPractice(subject: Subject, topicId: string) {
       :scope="modal.scope"
       @practice-recorded="onModalPracticeRecorded"
       @update:show="onModalClose"
+    />
+
+    <KeywordMemorizeModal
+      :show="keywordModal.show"
+      :open-key="keywordModal.openKey"
+      :subject="keywordModal.subject"
+      :topic="keywordModal.topic"
+      :keyword="keywordModal.keyword"
+      @update:show="onKeywordModalClose"
     />
   </div>
 </template>

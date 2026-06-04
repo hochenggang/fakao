@@ -12,11 +12,19 @@ interface Props {
   isNormalMode: boolean
 }
 
-defineProps<Props>()
-const emit = defineEmits<{ (e: 'practice', subjectId: string, topicId: string): void }>()
+const props = defineProps<Props>()
+const emit = defineEmits<{
+  (e: 'practice', subjectId: string, topicId: string): void
+  (e: 'memorize', keyword: string): void
+}>()
 
 function clickPractice(subjectId: string, topicId: string) {
   emit('practice', subjectId, topicId)
+}
+
+function clickKeyword(kw: string) {
+  if (!props.isNormalMode) return
+  emit('memorize', kw)
 }
 </script>
 
@@ -30,8 +38,15 @@ function clickPractice(subjectId: string, topicId: string) {
         </div>
         <n-space v-if="topic.keywords.length > 0" size="small" :wrap="true" style="margin-top: 4px">
 
-          <n-tag v-for="kw in topic.keywords" :key="kw" size="small" :bordered="false"
-            style="background: #e2e8f0; color: #475569">
+          <n-tag
+            v-for="kw in topic.keywords"
+            :key="kw"
+            size="small"
+            :bordered="false"
+            class="keyword-tag"
+            :class="{ 'keyword-tag-clickable': isNormalMode }"
+            @click="clickKeyword(kw)"
+          >
             {{ kw }}
           </n-tag>
         </n-space>
@@ -53,3 +68,20 @@ function clickPractice(subjectId: string, topicId: string) {
     </div>
   </n-card>
 </template>
+
+<style scoped>
+.keyword-tag {
+  background: #e2e8f0;
+  color: #475569;
+}
+.keyword-tag-clickable {
+  background: #e0e7ff !important;
+  color: #3730a3 !important;
+  cursor: pointer;
+  transition: transform 0.15s, background 0.15s;
+}
+.keyword-tag-clickable:hover {
+  background: #c7d2fe !important;
+  transform: translateY(-1px);
+}
+</style>
