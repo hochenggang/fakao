@@ -7,12 +7,6 @@ export const EXAM_NAMES: Record<ExamId, string> = {
   exam3: '主观题',
 }
 
-export const EXAM_KIND: Record<ExamId, 'objective' | 'subjective'> = {
-  exam1: 'objective',
-  exam2: 'objective',
-  exam3: 'subjective',
-}
-
 export interface Topic {
   id: string
   name: string
@@ -30,3 +24,6 @@ export interface Exam {
   name: string
   subjects: Subject[]
 }
+
+// 单一来源:EXAM_KIND 与 examKindOf 来自 @/lib/examKind
+export { EXAM_KIND, examKindOf, type ExamKind } from '@/lib/examKind'

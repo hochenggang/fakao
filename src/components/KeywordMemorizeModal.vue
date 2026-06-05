@@ -25,7 +25,7 @@ const userRecall = ref('')
 const evaluationText = ref('')
 const error = ref('')
 
-const flow = useKeywordFlow()
+const { generateMemo, evaluateMemo } = useKeywordFlow()
 
 const displayed = computed(() => {
   if (!props.show) return false
@@ -33,28 +33,46 @@ const displayed = computed(() => {
   return step.value === 'view-memo' || step.value === 'recall' || step.value === 'evaluated'
 })
 
-function cacheKey(): string {
-  return `fakao_keyword_memo:${props.subject.id}:${props.topic.id}:${props.keyword}`
+/** 关键词缓存 key:每(subject, topic, keyword)一条独立记录 */
+const CACHE_KEY = 'fakao_keyword_memos'
+type CacheMap = Record<string, string>
+
+function cacheEntryKey(): string {
+  return `${props.subject.id}:${props.topic.id}:${props.keyword}`
 }
 
-function loadFromCache(): string | null {
+function readCache(): string | null {
   try {
-    return localStorage.getItem(cacheKey())
+    const raw = localStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    const map = JSON.parse(raw) as CacheMap
+    return map[cacheEntryKey()] ?? null
   } catch {
     return null
   }
 }
 
-function saveToCache(text: string) {
+function writeCache(text: string) {
   try {
-    localStorage.setItem(cacheKey(), text)
-  } catch {}
+    const raw = localStorage.getItem(CACHE_KEY)
+    const map: CacheMap = raw ? (JSON.parse(raw) as CacheMap) : {}
+    map[cacheEntryKey()] = text
+    localStorage.setItem(CACHE_KEY, JSON.stringify(map))
+  } catch {
+    // 写入失败静默忽略
+  }
 }
 
 function clearCache() {
   try {
-    localStorage.removeItem(cacheKey())
-  } catch {}
+    const raw = localStorage.getItem(CACHE_KEY)
+    if (!raw) return
+    const map: CacheMap = JSON.parse(raw) as CacheMap
+    delete map[cacheEntryKey()]
+    localStorage.setItem(CACHE_KEY, JSON.stringify(map))
+  } catch {
+    // 忽略
+  }
 }
 
 function reset() {
@@ -69,7 +87,7 @@ async function doGenerateMemo(useCache: boolean) {
   step.value = 'loading-memo'
   error.value = ''
   if (useCache) {
-    const cached = loadFromCache()
+    const cached = readCache()
     if (cached) {
       memoText.value = cached
       step.value = 'view-memo'
@@ -77,12 +95,12 @@ async function doGenerateMemo(useCache: boolean) {
     }
   }
   try {
-    const text = await flow.generateMemo(props.subject, props.topic, props.keyword)
+    const text = await generateMemo(props.subject, props.topic, props.keyword)
     memoText.value = text
-    saveToCache(text)
+    writeCache(text)
     step.value = 'view-memo'
   } catch (e: any) {
-    error.value = `生成必背失败：${e?.message || '未知错误'}`
+    error.value = `生成必背失败:${e?.message || '未知错误'}`
     memoText.value = ''
     step.value = 'view-memo'
   }
@@ -97,7 +115,7 @@ async function doEvaluate() {
   step.value = 'loading-evaluate'
   error.value = ''
   try {
-    const text = await flow.evaluateMemo(
+    const text = await evaluateMemo(
       props.subject,
       props.topic,
       props.keyword,
@@ -107,7 +125,7 @@ async function doEvaluate() {
     evaluationText.value = text
     step.value = 'evaluated'
   } catch (e: any) {
-    error.value = `AI 评析失败：${e?.message || '未知错误'}\n\n请检查模型配置是否正确。`
+    error.value = `AI 评析失败:${e?.message || '未知错误'}\n\n请检查模型配置是否正确。`
     evaluationText.value = ''
     step.value = 'evaluated'
   }
@@ -137,12 +155,12 @@ watch(() => props.openKey, async (k) => {
       {{ error }}
     </n-alert>
 
-    <!-- 步骤 2：必背文本 -->
+    <!-- 步骤 2:必背文本 -->
     <div v-if="step === 'view-memo'" class="plain-text">
-      {{ memoText || '（生成失败，请关闭后重试）' }}
+      {{ memoText || '（生成失败,请关闭后重试）' }}
     </div>
 
-    <!-- 步骤 3：默写输入 -->
+    <!-- 步骤 3:默写输入 -->
     <div v-else-if="step === 'recall'">
       <n-input
         v-model:value="userRecall"
@@ -153,7 +171,7 @@ watch(() => props.openKey, async (k) => {
       />
     </div>
 
-    <!-- 步骤 5：评析结果 -->
+    <!-- 步骤 5:评析结果 -->
     <div v-else-if="step === 'evaluated'" class="plain-text">
       {{ evaluationText || '（评析失败）' }}
     </div>

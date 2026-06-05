@@ -28,8 +28,6 @@ export interface ChatMessage {
   content: string
 }
 
-export type PromptKey = 'system' | 'objective-judge' | 'subjective-judge' | 'objective-generate' | 'subjective-generate' | 'keyword-memo' | 'keyword-evaluate'
-
 // === Page metadata ===
 
 export interface PageInfo {

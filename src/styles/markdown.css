@@ -1,0 +1,71 @@
+/* 统一 Markdown / AI 报告渲染样式(全项目共享,挂 class="markdown" 即可) */
+.markdown {
+  color: #334155;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3 {
+  font-weight: 700;
+  color: #1e293b;
+  margin: 16px 0 8px;
+}
+
+.markdown h1 {
+  font-size: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.markdown h2 {
+  font-size: 16px;
+}
+
+.markdown h3 {
+  font-size: 15px;
+  color: #334155;
+}
+
+.markdown p {
+  margin: 8px 0;
+}
+
+.markdown strong {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.markdown ul,
+.markdown ol {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+
+.markdown li {
+  margin: 4px 0;
+}
+
+.markdown blockquote {
+  border-left: 3px solid #cbd5e1;
+  padding-left: 12px;
+  margin: 8px 0;
+  color: #64748b;
+}
+
+.markdown code {
+  background: #e2e8f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.markdown pre {
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 13px;
+}

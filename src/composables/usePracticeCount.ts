@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 import { exams } from '@/data/exams'
 import type { ExamId } from '@/types/exam'
+import { examKindOf } from '@/lib/examKind'
 import { usePracticeTracker } from './usePracticeTracker'
 
 export interface PracticeCountNode {
@@ -17,8 +18,6 @@ function sumCount(children: PracticeCountNode[]): number {
 export function usePracticeCount() {
   const { getCount: getTopicCount, getSubjectCount: getAllTopicCountBySubject } = usePracticeTracker()
 
-  const kindOf = (examId: ExamId) => (examId === 'exam3' ? 'subjective' as const : 'objective' as const)
-
   function getSubjectCount(subjectId: string, kind: 'objective' | 'subjective'): number {
     return getAllTopicCountBySubject(subjectId, kind)
   }
@@ -26,13 +25,13 @@ export function usePracticeCount() {
   function getExamCount(examId: ExamId): number {
     const exam = exams.find(e => e.id === examId)
     if (!exam) return 0
-    const kind = kindOf(examId)
+    const kind = examKindOf(examId)
     return exam.subjects.reduce((sum, s) => sum + getSubjectCount(s.id, kind), 0)
   }
 
   const tree = computed<PracticeCountNode>(() => {
     const children: PracticeCountNode[] = exams.map(e => {
-      const kind = kindOf(e.id)
+      const kind = examKindOf(e.id)
       const subjectNodes: PracticeCountNode[] = e.subjects.map(s => {
         const topicNodes: PracticeCountNode[] = s.topics.map(t => ({
           id: t.id,

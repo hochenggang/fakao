@@ -1,3 +1,3 @@
-export { useLLM } from './ask'
-export type { AskOptions } from './ask'
+export { useLLM, type CallStreamOptions } from './useLLM'
+export { callStreamWithParse, type ParseRetryOptions } from './callWithParse'
 export { extractJson, validateShape, type JsonShape, type JsonShapeValue } from './json'

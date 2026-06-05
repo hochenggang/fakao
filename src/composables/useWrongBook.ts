@@ -1,5 +1,7 @@
-import { ref } from 'vue'
+import { computed } from 'vue'
 import type { ExamId } from '@/types/exam'
+import { useLocalStorage } from './useLocalStorage'
+import { genId } from '@/lib/format'
 
 export interface WrongBookObjectiveQ {
   question: string
@@ -44,26 +46,10 @@ export interface WrongBookItem {
 
 const STORAGE_KEY = 'fakao_wrongbook'
 
-function load(): WrongBookItem[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return JSON.parse(raw)
-  } catch {}
-  return []
-}
+const items = useLocalStorage<WrongBookItem[]>(STORAGE_KEY, [])
 
-function save(list: WrongBookItem[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
-}
-
-function genId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID()
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-}
-
-const items = ref<WrongBookItem[]>(load())
+const objectiveCount = computed(() => items.value.filter(i => i.type === 'objective').length)
+const subjectiveCount = computed(() => items.value.filter(i => i.type === 'subjective').length)
 
 export function useWrongBook() {
   function add(item: Omit<WrongBookItem, 'id' | 'createdAt'> & { id?: string; createdAt?: number }): WrongBookItem {
@@ -73,13 +59,11 @@ export function useWrongBook() {
       createdAt: item.createdAt || Date.now(),
     } as WrongBookItem
     items.value.unshift(full)
-    save(items.value)
     return full
   }
 
   function remove(id: string) {
     items.value = items.value.filter(i => i.id !== id)
-    save(items.value)
   }
 
   function list(): WrongBookItem[] {
@@ -88,7 +72,6 @@ export function useWrongBook() {
 
   function clear() {
     items.value = []
-    save([])
   }
 
   function has(id: string): boolean {
@@ -102,5 +85,7 @@ export function useWrongBook() {
     list,
     clear,
     has,
+    objectiveCount,
+    subjectiveCount,
   }
 }

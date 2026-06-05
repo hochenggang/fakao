@@ -7,11 +7,13 @@ import {
 import { Edit16Regular } from '@vicons/fluent'
 import { examById } from '@/data/exams'
 import { EXAM_IDS, EXAM_NAMES } from '@/types/exam'
-import type { ExamId, Subject, Topic } from '@/types/exam'
+import { type ExamId } from '@/types/exam'
+import type { Subject, Topic } from '@/types/exam'
+import { examKindOf } from '@/lib/examKind'
 import { useRuntimeMode } from '@/composables/useRuntimeMode'
 import { usePracticeTracker } from '@/composables/usePracticeTracker'
 import { usePracticeCount } from '@/composables/usePracticeCount'
-import { kindOf, type PracticeScope } from '@/composables/usePracticeFlow'
+import { type PracticeScope } from '@/composables/usePracticeFlow'
 import PracticeModal from '@/components/PracticeModal.vue'
 import KeywordMemorizeModal from '@/components/KeywordMemorizeModal.vue'
 import TopicCard from '@/components/TopicCard.vue'
@@ -64,7 +66,7 @@ const openKey = ref(0)
 const examOptions = EXAM_IDS.map(id => ({ label: EXAM_NAMES[id], value: id }))
 
 const currentExam = computed(() => examById(examId.value)!)
-const currentKind = computed(() => kindOf(examId.value))
+const currentKind = computed(() => examKindOf(examId.value))
 const isSubjective = computed(() => currentKind.value === 'subjective')
 
 const subjectOptions = computed(() =>

@@ -5,7 +5,7 @@ import {
   NDivider, NTag, NSpace, useMessage, NIcon
 } from 'naive-ui'
 import { Edit16Regular } from '@vicons/fluent'
-import { marked } from 'marked'
+import { renderMarkdown, scoreTagType, scorePercent, formatScore } from '@/lib/format'
 import type { ExamId, Subject, Topic } from '@/types/exam'
 import {
   usePracticeFlow,
@@ -17,6 +17,12 @@ import {
 import { useWrongBook } from '@/composables/useWrongBook'
 import { usePracticeTracker } from '@/composables/usePracticeTracker'
 import { useRuntimeMode } from '@/composables/useRuntimeMode'
+import {
+  buildExamJson,
+  buildKnowledgeContext,
+  findSubjectTopic,
+  type PromptContext,
+} from '@/composables/usePromptStore'
 
 interface Props {
   show: boolean
@@ -52,6 +58,9 @@ const subjectiveQ = ref<SubjectiveGenerateOut | null>(null)
 
 const actualTopicId = ref(props.topic.id)
 const actualTopicName = ref(props.topic.name)
+// 整卷演练场景下,AI 实际选的 subject/topic 由 LLM 返回的 subjectId/topicId 反查
+const actualSubjectId = ref(props.subject.id)
+const actualSubjectName = ref(props.subject.name || '整卷演练（AI 选题中）')
 
 const singleAnswer = ref<string | null>(null)
 const multiAnswer = ref<string[]>([])
@@ -79,11 +88,11 @@ const allObjectiveCorrect = computed(() => {
 
 const renderedReport = computed(() => {
   if (!aiResult.value?.report) return ''
-  return marked.parse(aiResult.value.report)
+  return renderMarkdown(aiResult.value.report)
 })
 const renderedReference = computed(() => {
   if (!aiResult.value?.referenceAnswer) return ''
-  return marked.parse(aiResult.value.referenceAnswer)
+  return renderMarkdown(aiResult.value.referenceAnswer)
 })
 
 const score = computed(() => aiResult.value?.score)
@@ -106,19 +115,30 @@ function reset() {
 async function doGenerate() {
   error.value = ''
   try {
-    const out = await flow.generate(props.subject, props.topic, props.scope)
+    // 整卷演练场景不传占位 subject/topic,让 LLM 从 examSubjectsJson 任选
+    const isExamScope = props.scope === 'exam'
+    const out = await flow.generate(
+      isExamScope ? null : props.subject,
+      isExamScope ? null : props.topic,
+      props.scope,
+    )
     if ('caseText' in out) {
       subjectiveQ.value = out
     } else {
       singleQ.value = out.single
       multiQ.value = out.multiple
     }
+    if (out.subjectId) actualSubjectId.value = out.subjectId
     if (out.topicId) actualTopicId.value = out.topicId
     if (out.topicName) actualTopicName.value = out.topicName
+    // 反查 subject 真实名称(避免 LLM 名称漂移)
+    const found = findSubjectTopic(props.examId, out.subjectId, out.topicId)
+    if (found) actualSubjectName.value = found.subject.name
 
     if (props.scope !== 'topic') {
-      recordPractice(props.subject.id, actualTopicId.value, kind.value)
-      emit('practice-recorded', props.subject.id, actualTopicId.value, kind.value)
+      const subjectIdForRecord = actualSubjectId.value || props.subject.id
+      recordPractice(subjectIdForRecord, actualTopicId.value, kind.value)
+      emit('practice-recorded', subjectIdForRecord, actualTopicId.value, kind.value)
     }
   } catch (e: any) {
     error.value = `出题失败：${e?.message || '未知错误'}`
@@ -140,10 +160,27 @@ async function handleObjectiveSubmit() {
 async function handleJudge() {
   judging.value = true
   error.value = ''
+  // 整卷演练场景:用 LLM 实际选的 subject/topic 调评;若反查失败,退回 props 占位
+  const target = findSubjectTopic(
+    props.examId,
+    actualSubjectId.value,
+    actualTopicId.value,
+  ) ?? { subject: props.subject, topic: props.topic }
+  const targetSubject = target.subject
+  const targetTopic = target.topic
   try {
-    let extras: Record<string, string>
+    const baseCtx: PromptContext = {
+      scope: props.scope,
+      subject: targetSubject,
+      topic: targetTopic,
+      knowledgeContext: buildKnowledgeContext(targetSubject, targetTopic, props.scope),
+      examJson: props.scope === 'exam' ? buildExamJson(props.examId) : '',
+    }
+
+    let judgeCtx: PromptContext
     if (isSubjective.value && subjectiveQ.value) {
-      extras = {
+      judgeCtx = {
+        ...baseCtx,
         caseText: subjectiveQ.value.caseText,
         question: subjectiveQ.value.question,
         answer: subjectiveAnswer.value || '（学生未作答）',
@@ -155,10 +192,11 @@ async function handleJudge() {
       const multiOpts = multiQ.value
         ? multiQ.value.options.map(o => `${o.label}. ${o.text}`).join('\n')
         : '（无）'
-      extras = {
+      judgeCtx = {
+        ...baseCtx,
         singleQuestion: singleQ.value?.question || '（无）',
         singleOptions: singleOpts,
-        singleAnswer: singleAnswer.value || '未作答',
+        singleAnswer: singleAnswer.value ?? '未作答',
         singleCorrect: singleQ.value?.correctAnswer || '',
         multiQuestion: multiQ.value?.question || '（无）',
         multiOptions: multiOpts,
@@ -166,16 +204,16 @@ async function handleJudge() {
         multiCorrect: multiQ.value ? multiQ.value.correctAnswer.join('、') : '',
       }
     }
-    const r = await flow.judge(props.subject, props.topic, props.scope, extras)
+    const r = await flow.judge(judgeCtx)
     aiResult.value = r
 
     if (isSubjective.value && subjectiveQ.value) {
       addWrong({
         examId: props.examId,
         type: 'subjective',
-        subjectId: props.subject.id,
+        subjectId: targetSubject.id,
         topicId: actualTopicId.value,
-        subjectName: props.subject.name,
+        subjectName: targetSubject.name,
         topicName: actualTopicName.value,
         caseText: subjectiveQ.value.caseText,
         questionText: subjectiveQ.value.question,
@@ -189,9 +227,9 @@ async function handleJudge() {
       addWrong({
         examId: props.examId,
         type: 'objective',
-        subjectId: props.subject.id,
+        subjectId: targetSubject.id,
         topicId: actualTopicId.value,
-        subjectName: props.subject.name,
+        subjectName: targetSubject.name,
         topicName: actualTopicName.value,
         singleQuestion: singleQ.value || undefined,
         multiQuestion: multiQ.value || undefined,
@@ -233,7 +271,7 @@ function handleClose() {
         <n-icon>
           <Edit16Regular />
         </n-icon>
-        <span>{{ subject.name }} · {{ actualTopicName }}</span>
+        <span>{{ actualSubjectName || subject.name }} · {{ actualTopicName }}</span>
       </div>
     </template>
 
@@ -308,7 +346,7 @@ function handleClose() {
         <div style="font-size: 14px; font-weight: 600; color: #2563eb; margin-bottom: 12px">
           AI 深度评判报告
         </div>
-        <div class="ai-result" v-html="renderedReport" />
+        <div class="markdown" v-html="renderedReport" />
       </div>
 
       <div style="display: flex; justify-content: center; gap: 12px; margin-top: 24px; flex-wrap: wrap">
@@ -362,12 +400,11 @@ function handleClose() {
         <n-divider />
         <div v-if="score" style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px">
           <div style="font-size: 14px; font-weight: 600; color: #1e293b">AI 评分</div>
-          <n-tag size="large"
-            :type="score[0] / score[1] >= 0.8 ? 'success' : score[0] / score[1] >= 0.6 ? 'warning' : 'error'">
+          <n-tag size="large" :type="scoreTagType(score)">
             {{ score[0] }} / {{ score[1] }} 分
           </n-tag>
           <span style="font-size: 13px; color: #64748b">
-            （{{ Math.round((score[0] / score[1]) * 100) }}%）
+            （{{ scorePercent(score) }}%）
           </span>
         </div>
 
@@ -375,13 +412,13 @@ function handleClose() {
           <div style="font-size: 14px; font-weight: 600; color: #2563eb; margin-bottom: 8px">
             参考答案要点
           </div>
-          <div class="ai-result" style="background: #f0fdf4; border: 1px solid #bbf7d0;" v-html="renderedReference" />
+          <div class="markdown" style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 16px; border-radius: 8px; max-height: 400px; overflow-y: auto" v-html="renderedReference" />
         </div>
 
         <div style="font-size: 14px; font-weight: 600; color: #2563eb; margin-bottom: 12px">
           AI 阅卷组专家点评
         </div>
-        <div class="ai-result" v-html="renderedReport" />
+        <div class="markdown" v-html="renderedReport" />
       </div>
 
       <div style="display: flex; justify-content: center; gap: 12px; flex-wrap: wrap">
@@ -400,66 +437,5 @@ function handleClose() {
 <style scoped>
 .case-block {
   white-space: pre-wrap;
-}
-
-.ai-result {
-  padding: 16px;
-  background: #f8fafc;
-  border-radius: 8px;
-  font-size: 14px;
-  line-height: 1.8;
-  color: #334155;
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.ai-result :deep(h1),
-.ai-result :deep(h2),
-.ai-result :deep(h3) {
-  font-size: 16px;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 16px 0 8px;
-}
-
-.ai-result :deep(p) {
-  margin: 8px 0;
-}
-
-.ai-result :deep(strong) {
-  font-weight: 600;
-  color: #1e293b;
-}
-
-.ai-result :deep(ul),
-.ai-result :deep(ol) {
-  padding-left: 20px;
-  margin: 8px 0;
-}
-
-.ai-result :deep(li) {
-  margin: 4px 0;
-}
-
-.ai-result :deep(blockquote) {
-  border-left: 3px solid #cbd5e1;
-  padding-left: 12px;
-  margin: 8px 0;
-  color: #64748b;
-}
-
-.ai-result :deep(code) {
-  background: #e2e8f0;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 13px;
-}
-
-.ai-result :deep(pre) {
-  background: #1e293b;
-  color: #e2e8f0;
-  padding: 12px;
-  border-radius: 8px;
-  overflow-x: auto;
 }
 </style>

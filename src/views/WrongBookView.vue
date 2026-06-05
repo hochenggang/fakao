@@ -1,32 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import {
   NCard, NButton, NTag, NEmpty, NSpace, NPopconfirm, NDivider, NAlert, NCollapse, NCollapseItem
 } from 'naive-ui'
-import { Delete16Regular, BookOpen16Regular } from '@vicons/fluent'
+import { Delete16Regular } from '@vicons/fluent'
 import { useWrongBook } from '@/composables/useWrongBook'
-import { marked } from 'marked'
+import { renderMarkdown, formatDate, scoreTagType, scorePercent } from '@/lib/format'
 
-const { items, remove } = useWrongBook()
-
-const objectiveCount = computed(() => items.value.filter(i => i.type === 'objective').length)
-const subjectiveCount = computed(() => items.value.filter(i => i.type === 'subjective').length)
-
-function formatDate(ts: number): string {
-  const d = new Date(ts)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-
-function renderMarkdown(text: string): string {
-  return marked.parse(text) as string
-}
-
-function scoreTagType(score: [number, number]): 'success' | 'warning' | 'error' {
-  const ratio = score[0] / score[1]
-  if (ratio >= 0.8) return 'success'
-  if (ratio >= 0.6) return 'warning'
-  return 'error'
-}
+const { items, remove, objectiveCount, subjectiveCount } = useWrongBook()
 </script>
 
 <template>
@@ -144,7 +124,8 @@ function scoreTagType(score: [number, number]): 'success' | 'warning' | 'error' 
             <n-divider style="margin: 12px 0" />
             <div style="font-size: 13px; font-weight: 600; color: #2563eb; margin-bottom: 8px">AI 错因剖析</div>
             <div
-              class="ai-judge-content"
+              class="markdown"
+              style="padding: 16px; background: #f8fafc; border-radius: 8px; max-height: 400px; overflow-y: auto"
               v-html="renderMarkdown(item.aiJudgeResult || '')"
             />
           </div>
@@ -161,7 +142,7 @@ function scoreTagType(score: [number, number]): 'success' | 'warning' | 'error' 
                 {{ item.score[0] }} / {{ item.score[1] }} 分
               </n-tag>
               <span style="font-size: 13px; color: #64748b">
-                （{{ Math.round((item.score[0] / item.score[1]) * 100) }}%）
+                （{{ scorePercent(item.score) }}%）
               </span>
             </div>
 
@@ -197,8 +178,8 @@ function scoreTagType(score: [number, number]): 'success' | 'warning' | 'error' 
             <div v-if="item.referenceAnswer" style="margin-bottom: 16px">
               <div style="font-size: 13px; font-weight: 600; color: #15803d; margin-bottom: 8px">参考答案要点</div>
               <div
-                class="ai-judge-content"
-                style="background: #f0fdf4; border: 1px solid #bbf7d0;"
+                class="markdown"
+                style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 16px; border-radius: 8px; max-height: 400px; overflow-y: auto"
                 v-html="renderMarkdown(item.referenceAnswer)"
               />
             </div>
@@ -207,7 +188,8 @@ function scoreTagType(score: [number, number]): 'success' | 'warning' | 'error' 
             <n-divider style="margin: 12px 0" />
             <div style="font-size: 13px; font-weight: 600; color: #2563eb; margin-bottom: 8px">AI 阅卷组专家点评</div>
             <div
-              class="ai-judge-content"
+              class="markdown"
+              style="padding: 16px; background: #f8fafc; border-radius: 8px; max-height: 400px; overflow-y: auto"
               v-html="renderMarkdown(item.aiJudgeResult || '')"
             />
           </div>
@@ -231,64 +213,3 @@ function scoreTagType(score: [number, number]): 'success' | 'warning' | 'error' 
     </div>
   </div>
 </template>
-
-<style scoped>
-.ai-judge-content {
-  padding: 16px;
-  background: #f8fafc;
-  border-radius: 8px;
-  font-size: 13px;
-  line-height: 1.8;
-  color: #334155;
-}
-
-.ai-judge-content :deep(p) {
-  margin: 8px 0;
-}
-
-.ai-judge-content :deep(strong) {
-  font-weight: 600;
-  color: #1e293b;
-}
-
-.ai-judge-content :deep(ul),
-.ai-judge-content :deep(ol) {
-  padding-left: 20px;
-  margin: 8px 0;
-}
-
-.ai-judge-content :deep(li) {
-  margin: 4px 0;
-}
-
-.ai-judge-content :deep(blockquote) {
-  border-left: 3px solid #cbd5e1;
-  padding-left: 12px;
-  margin: 8px 0;
-  color: #64748b;
-}
-
-.ai-judge-content :deep(code) {
-  background: #e2e8f0;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 13px;
-}
-
-.ai-judge-content :deep(pre) {
-  background: #1e293b;
-  color: #e2e8f0;
-  padding: 12px;
-  border-radius: 8px;
-  overflow-x: auto;
-}
-
-.ai-judge-content :deep(h1),
-.ai-judge-content :deep(h2),
-.ai-judge-content :deep(h3) {
-  font-size: 15px;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 16px 0 8px;
-}
-</style>

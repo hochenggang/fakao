@@ -17,5 +17,15 @@ export function useRuntimeMode() {
 
   const isDegradedMode = computed(() => !isNormalMode.value)
 
-  return { isNormalMode, isDegradedMode }
+  /**
+   * 守卫:不满足正常模式时直接 throw,供 LLM 入口统一调用。
+   * 任何 LLM 调用都应作为第一步调用本函数,失败则立即终止。
+   */
+  function requireNormalMode(): void {
+    if (!isNormalMode.value) {
+      throw new Error('降级模式下无法使用 AI 功能，请先在设置中配置 API 信息')
+    }
+  }
+
+  return { isNormalMode, isDegradedMode, requireNormalMode }
 }

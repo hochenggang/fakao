@@ -1,19 +1,17 @@
 import { type Ref } from 'vue'
 import type { ExamId, Subject, Topic } from '@/types/exam'
 import type { JsonShape } from './llm/json'
-import { useLLM } from './llm'
-import { buildPrompt } from './usePromptStore'
-import { useRuntimeMode } from './useRuntimeMode'
-import { examById } from '@/data/exams'
+import { useLLM, callStreamWithParse } from './llm'
+import { examKindOf, type ExamKind } from '@/lib/examKind'
+import { buildExamJson, buildKnowledgeContext, type PromptContext } from './usePromptStore'
 
 export type PracticeScope = 'topic' | 'subject' | 'exam'
-export type PracticeKind = 'objective' | 'subjective'
+export type PracticeKind = ExamKind
 
 export interface ObjectiveOption {
   label: string
   text: string
 }
-
 
 export interface ObjectiveSingleQ {
   question: string
@@ -30,6 +28,8 @@ export interface ObjectiveMultiQ {
 }
 
 export interface ObjectiveGenerateOut {
+  subjectId: string
+  subjectName: string
   topicId: string
   topicName: string
   single: ObjectiveSingleQ
@@ -37,6 +37,8 @@ export interface ObjectiveGenerateOut {
 }
 
 export interface SubjectiveGenerateOut {
+  subjectId: string
+  subjectName: string
   topicId: string
   topicName: string
   caseText: string
@@ -50,6 +52,8 @@ export interface JudgeOut {
 }
 
 const SUBJECTIVE_GENERATE_SCHEMA: JsonShape = {
+  subjectId: 'string',
+  subjectName: 'string',
   topicId: 'string',
   topicName: 'string',
   caseText: 'string',
@@ -59,6 +63,8 @@ const SUBJECTIVE_GENERATE_SCHEMA: JsonShape = {
 const OBJECTIVE_OPTION_ITEM: JsonShape = { label: 'string', text: 'string' }
 
 const OBJECTIVE_GENERATE_SCHEMA: JsonShape = {
+  subjectId: 'string',
+  subjectName: 'string',
   topicId: 'string',
   topicName: 'string',
   single: {
@@ -79,70 +85,46 @@ const JUDGE_SCHEMA: JsonShape = {
   report: 'string',
 }
 
-export function kindOf(examId: ExamId): PracticeKind {
-  return examId === 'exam3' ? 'subjective' : 'objective'
-}
-
-function buildExamSubjectsJson(examId: ExamId): string {
-  const exam = examById(examId)
-  if (!exam) return ''
-  const slim = exam.subjects.map(s => ({
-    id: s.id,
-    name: s.name,
-    topics: s.topics.map(t => ({ id: t.id, name: t.name, keywords: t.keywords })),
-  }))
-  return JSON.stringify(slim, null, 2)
-}
-
 export function usePracticeFlow(examId: Ref<ExamId>) {
-  const llm = useLLM()
-  const { isNormalMode } = useRuntimeMode()
-
-  function checkMode() {
-    if (!isNormalMode.value) throw new Error('降级模式下无法使用 AI 功能')
-  }
+  const { callStream } = useLLM()
 
   async function generate(
-    subject: Subject,
-    topic: Topic,
-    scope: PracticeScope
+    subject: Subject | null,
+    topic: Topic | null,
+    scope: PracticeScope,
   ): Promise<ObjectiveGenerateOut | SubjectiveGenerateOut> {
-    checkMode()
-    const kind = kindOf(examId.value)
+    const kind = examKindOf(examId.value)
     const promptKey = kind === 'subjective' ? 'subjective-generate' : 'objective-generate'
-
-    const extras: Record<string, string> = {}
-    if (scope === 'exam') {
-      extras.examSubjectsJson = buildExamSubjectsJson(examId.value)
-    }
-
-    const prompt = buildPrompt(promptKey, subject, topic, scope, extras)
     const schema = kind === 'subjective' ? SUBJECTIVE_GENERATE_SCHEMA : OBJECTIVE_GENERATE_SCHEMA
 
-    return llm.ask<ObjectiveGenerateOut | SubjectiveGenerateOut>({
-      messages: [{ role: 'user', content: prompt }],
+    const promptContext: PromptContext = {
+      scope,
+      subject,
+      topic,
+      knowledgeContext: buildKnowledgeContext(subject, topic, scope),
+      examJson: scope === 'exam' ? buildExamJson(examId.value) : '',
+    }
+
+    return callStreamWithParse<ObjectiveGenerateOut | SubjectiveGenerateOut>(callStream, {
+      promptKey,
+      promptContext,
+      blur: true, // 出题场景需要 blur
       schema,
-      thinking: false,
-      blur: true,
-    }) as Promise<ObjectiveGenerateOut | SubjectiveGenerateOut>
+      retries: 3,
+    })
   }
 
-  async function judge(
-    subject: Subject,
-    topic: Topic,
-    scope: PracticeScope,
-    extras: Record<string, string>
-  ): Promise<JudgeOut> {
-    checkMode()
-    const kind = kindOf(examId.value)
+  async function judge(ctx: PromptContext): Promise<JudgeOut> {
+    const kind = examKindOf(examId.value)
     const promptKey = kind === 'subjective' ? 'subjective-judge' : 'objective-judge'
-    const prompt = buildPrompt(promptKey, subject, topic, scope, extras)
-    return llm.ask<JudgeOut>({
-      messages: [{ role: 'user', content: prompt }],
+    return callStreamWithParse<JudgeOut>(callStream, {
+      promptKey,
+      promptContext: ctx,
+      thinking: true, // 评判需要思考
       schema: JUDGE_SCHEMA,
-      thinking: true,
-      blur: false,
-    }) as Promise<JudgeOut>
+      retries: 3,
+      fallbackReport: true, // 失败时回退为 { report: text }
+    })
   }
 
   return { generate, judge }

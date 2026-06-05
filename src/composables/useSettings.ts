@@ -1,12 +1,9 @@
-import { ref, watch } from 'vue'
-import type { Settings, ProviderConfig, ModelConfig } from '@/types'
+import { computed } from 'vue'
+import type { Settings, ProviderConfig, ModelConfig, DefaultModel } from '@/types'
+import { useLocalStorage } from './useLocalStorage'
+import { genId } from '@/lib/format'
 
 const STORAGE_KEY = 'fakao_settings'
-
-let uid = 0
-function nextId(): string {
-  return `p_${Date.now()}_${++uid}`
-}
 
 function defaultModel(): ModelConfig {
   return { name: '', thinking: false }
@@ -14,7 +11,7 @@ function defaultModel(): ModelConfig {
 
 function defaultProvider(): ProviderConfig {
   return {
-    id: nextId(),
+    id: genId('p'),
     name: '',
     baseUrl: '',
     apiKey: '',
@@ -22,25 +19,47 @@ function defaultProvider(): ProviderConfig {
   }
 }
 
-function load(): Settings {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<Settings>
-      return {
-        providers: parsed.providers?.length ? parsed.providers : [defaultProvider()],
-        defaultModel: parsed.defaultModel,
-      }
-    }
-  } catch {}
+function defaultSettings(): Settings {
   return { providers: [defaultProvider()] }
 }
 
-const settings = ref<Settings>(load())
+const settings = useLocalStorage<Settings>(STORAGE_KEY, defaultSettings())
 
-watch(settings, (val) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(val))
-}, { deep: true })
+/**
+ * 组合 key(providerId:modelName)用于 <n-select> 选项值。
+ * SettingsView 直接消费 defaultModelOptions / defaultModelValue / setDefaultModelByKey,
+ * 避免模板中重复字符串拼接。
+ */
+function encodeKey(d: DefaultModel): string {
+  return `${d.providerId}:${d.modelName}`
+}
+
+function decodeKey(v: string): DefaultModel | null {
+  const idx = v.indexOf(':')
+  if (idx < 0) return null
+  return { providerId: v.slice(0, idx), modelName: v.slice(idx + 1) }
+}
+
+const defaultModelOptions = computed<Array<{ label: string; value: string }>>(() => {
+  const opts: Array<{ label: string; value: string }> = []
+  for (const p of settings.value.providers) {
+    if (!p.baseUrl.trim() || !p.apiKey.trim()) continue
+    const providerLabel = p.name.trim() || '未命名供应商'
+    for (const m of p.models) {
+      if (!m.name.trim()) continue
+      opts.push({
+        label: `${providerLabel} - ${m.name}`,
+        value: encodeKey({ providerId: p.id, modelName: m.name }),
+      })
+    }
+  }
+  return opts
+})
+
+const defaultModelValue = computed(() => {
+  const def = settings.value.defaultModel
+  return def ? encodeKey(def) : null
+})
 
 export function useSettings() {
   function addProvider() {
@@ -75,6 +94,11 @@ export function useSettings() {
     settings.value.defaultModel = { providerId, modelName }
   }
 
+  function setDefaultModelByKey(key: string) {
+    const d = decodeKey(key)
+    if (d) settings.value.defaultModel = d
+  }
+
   function clearDefaultModel() {
     settings.value.defaultModel = undefined
   }
@@ -83,14 +107,14 @@ export function useSettings() {
     const def = settings.value.defaultModel
     if (def) {
       const p = settings.value.providers.find(
-        x => x.id === def.providerId && x.baseUrl.trim() && x.apiKey.trim()
+        x => x.id === def.providerId && x.baseUrl.trim() && x.apiKey.trim(),
       )
       if (p && p.models.some(m => m.name === def.modelName && m.name.trim())) {
         return { baseUrl: p.baseUrl, apiKey: p.apiKey, model: def.modelName }
       }
     }
     const p = settings.value.providers.find(
-      x => x.baseUrl.trim() && x.apiKey.trim() && x.models.some(m => m.name.trim())
+      x => x.baseUrl.trim() && x.apiKey.trim() && x.models.some(m => m.name.trim()),
     )
     if (!p) return null
     const m = p.models.find(m => m.name.trim())!
@@ -104,7 +128,10 @@ export function useSettings() {
     addModel,
     removeModel,
     setDefaultModel,
+    setDefaultModelByKey,
     clearDefaultModel,
     resolveDefaultModel,
+    defaultModelOptions,
+    defaultModelValue,
   }
 }

@@ -1,4 +1,7 @@
-import { ref } from 'vue'
+import { useLocalStorage } from './useLocalStorage'
+
+const STORAGE_KEY = 'fakao_practice_v2'
+const LEGACY_KEY = 'fakao_practice'
 
 export interface PracticeRecord {
   id: string
@@ -9,44 +12,56 @@ export interface PracticeRecord {
   lastPracticedAt: number
 }
 
-const STORAGE_KEY = 'fakao_practice_v2'
+interface LegacyRecord {
+  subjectId: string
+  topicId: string
+  count: number
+  lastPracticedAt: number
+}
 
-function load(): PracticeRecord[] {
+/** 从 fakao_practice 读取并转换为 v2 结构。 */
+function migrateLegacy(): PracticeRecord[] {
+  try {
+    const raw = localStorage.getItem(LEGACY_KEY)
+    if (!raw) return []
+    const legacy = JSON.parse(raw) as LegacyRecord[]
+    if (!Array.isArray(legacy)) return []
+    return legacy.map(r => ({
+      id: `objective-${r.subjectId}-${r.topicId}`,
+      subjectId: r.subjectId,
+      topicId: r.topicId,
+      type: 'objective' as const,
+      count: r.count,
+      lastPracticedAt: r.lastPracticedAt,
+    }))
+  } catch {
+    return []
+  }
+}
+
+function loadInitial(): PracticeRecord[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return JSON.parse(raw)
-  } catch { }
-
-  const legacyRaw = localStorage.getItem('fakao_practice')
-  if (legacyRaw) {
-    try {
-      const legacy = JSON.parse(legacyRaw) as Array<{
-        subjectId: string
-        topicId: string
-        count: number
-        lastPracticedAt: number
-      }>
-      const migrated: PracticeRecord[] = legacy.map(r => ({
-        id: `objective-${r.subjectId}-${r.topicId}`,
-        subjectId: r.subjectId,
-        topicId: r.topicId,
-        type: 'objective' as const,
-        count: r.count,
-        lastPracticedAt: r.lastPracticedAt
-      }))
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated))
-      return migrated
-    } catch { }
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) return parsed as PracticeRecord[]
+    }
+  } catch {
+    // 读取失败,走迁移
   }
-
-  return []
+  // 触发一次性迁移
+  const migrated = migrateLegacy()
+  if (migrated.length) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated))
+    } catch {
+      // 写入失败也无所谓,内存里有
+    }
+  }
+  return migrated
 }
 
-function save(list: PracticeRecord[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
-}
-
-const records = ref<PracticeRecord[]>(load())
+const records = useLocalStorage<PracticeRecord[]>(STORAGE_KEY, loadInitial())
 
 export function usePracticeTracker() {
   function record(subjectId: string, topicId: string, type: 'objective' | 'subjective') {
@@ -58,7 +73,6 @@ export function usePracticeTracker() {
     } else {
       records.value.push({ id, subjectId, topicId, type, count: 1, lastPracticedAt: Date.now() })
     }
-    save(records.value)
   }
 
   function getCount(subjectId: string, topicId: string, type: 'objective' | 'subjective'): number {

@@ -83,7 +83,6 @@
               + 添加供应商
             </n-button>
 
-            <!-- 在此增加一个 默认模型的选项，把所有的 供应商+'-'+模型 都列出来，程序的使用过程中，直接调用选定的模型。 -->
             <div v-if="defaultModelOptions.length" class="default-model-row">
               <span class="default-model-label">默认模型：</span>
               <n-select
@@ -93,7 +92,7 @@
                 placeholder="选择默认调用的模型"
                 filterable
                 style="width: 280px"
-                @update:value="onDefaultModelChange"
+                @update:value="setDefaultModelByKey"
               />
             </div>
 
@@ -109,36 +108,6 @@
               鸣谢 LPQE-Learning 开源项目
             </a>
           </div>
-        </div>
-      </n-tab-pane>
-
-      <n-tab-pane name="prompts" tab="提示词设置">
-        <div class="tab-content">
-          <n-collapse>
-            <n-collapse-item v-for="item in promptItems" :key="item.key" :title="item.label">
-              <n-input v-model:value="custom[item.key]" :placeholder="defaults[item.key]" type="textarea"
-                :autosize="{ minRows: 6, maxRows: 20 }" />
-              <div v-if="hasCustom(item.key)" class="reset-row">
-                <n-button text type="warning" size="small" @click="onResetPrompt(item.key)">
-                  恢复默认
-                </n-button>
-              </div>
-            </n-collapse-item>
-          </n-collapse>
-
-          <n-alert :show-icon="false" type="info" :style="{ marginTop: '16px' }">
-            <p>提示词中可以使用以下占位符：</p>
-            <ul :style="{ paddingLeft: '20px', margin: '8px 0 0' }">
-              <li><code>{subject}</code> — 科目名称</li>
-              <li><code>{topic}</code> — 考点名称</li>
-              <li><code>{singleQuestion}</code> / <code>{multiQuestion}</code> — 单选/多选题干</li>
-              <li><code>{singleAnswer}</code> / <code>{multiAnswer}</code> — 学生作答</li>
-              <li><code>{singleCorrect}</code> / <code>{multiCorrect}</code> — 正确答案</li>
-              <li><code>{caseText}</code> — 案情材料</li>
-              <li><code>{question}</code> — 问题</li>
-              <li><code>{answer}</code> — 学生答卷</li>
-            </ul>
-          </n-alert>
         </div>
       </n-tab-pane>
 
@@ -187,7 +156,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onMounted, computed } from 'vue'
+import { ref, nextTick, onMounted } from 'vue'
 import type { InputInst } from 'naive-ui'
 import {
   NForm, NFormItem, NInput, NButton, NCollapse,
@@ -196,46 +165,19 @@ import {
 } from 'naive-ui'
 import { TrashOutline, AddOutline } from '@vicons/ionicons5'
 import { useSettings } from '@/composables/useSettings'
-import { usePromptStore } from '@/composables/usePromptStore'
 import { useWrongBook } from '@/composables/useWrongBook'
-import type { PromptKey } from '@/types'
 
-const { settings, addProvider, removeProvider, addModel, removeModel, setDefaultModel } = useSettings()
-const { custom, defaults, removeCustom, hasCustom } = usePromptStore()
-const { items: wrongBookItems, clear: clearWrongBook } = useWrongBook()
-
-const objectiveCount = computed(() => wrongBookItems.value.filter(i => i.type === 'objective').length)
-const subjectiveCount = computed(() => wrongBookItems.value.filter(i => i.type === 'subjective').length)
-
-const defaultModelOptions = computed(() => {
-  const opts: Array<{ label: string; value: string }> = []
-  for (const p of settings.value.providers) {
-    if (!p.baseUrl.trim() || !p.apiKey.trim()) continue
-    const providerLabel = p.name.trim() || '未命名供应商'
-    for (const m of p.models) {
-      if (!m.name.trim()) continue
-      opts.push({
-        label: `${providerLabel} - ${m.name}`,
-        value: `${p.id}:${m.name}`,
-      })
-    }
-  }
-  return opts
-})
-
-const defaultModelValue = computed(() => {
-  const def = settings.value.defaultModel
-  if (!def) return null
-  return `${def.providerId}:${def.modelName}`
-})
-
-function onDefaultModelChange(v: string) {
-  const idx = v.indexOf(':')
-  if (idx < 0) return
-  const providerId = v.slice(0, idx)
-  const modelName = v.slice(idx + 1)
-  setDefaultModel(providerId, modelName)
-}
+const {
+  settings,
+  addProvider,
+  removeProvider,
+  addModel,
+  removeModel,
+  setDefaultModelByKey,
+  defaultModelOptions,
+  defaultModelValue,
+} = useSettings()
+const { items: wrongBookItems, clear: clearWrongBook, objectiveCount, subjectiveCount } = useWrongBook()
 
 const expandedNames = ref<string[]>([])
 const nameInputRefs = ref<Record<string, InputInst>>({})
@@ -276,17 +218,6 @@ onMounted(() => {
     expandAndFocus(id)
   }
 })
-
-const promptItems: { key: PromptKey; label: string }[] = [
-  { key: 'system', label: '系统提示词' },
-  { key: 'objective-judge', label: '客观题评判提示词' },
-  { key: 'subjective-judge', label: '主观题评判提示词' },
-  { key: 'objective-generate', label: '动态出题提示词' },
-]
-
-function onResetPrompt(key: PromptKey) {
-  removeCustom(key)
-}
 </script>
 
 <style scoped>
@@ -345,11 +276,5 @@ function onResetPrompt(key: PromptKey) {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-}
-
-.reset-row {
-  margin-top: 8px;
-  display: flex;
-  justify-content: flex-end;
 }
 </style>

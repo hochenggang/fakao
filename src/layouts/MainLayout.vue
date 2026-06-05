@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, h } from 'vue'
+import { h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NLayout, NLayoutSider, NLayoutContent,
@@ -8,24 +8,17 @@ import {
 import type { MenuOption } from 'naive-ui'
 import {
   ChevronLeft16Regular, ChevronRight16Regular,
-  Home16Regular, VehicleSubway20Regular,
+  VehicleSubway20Regular,
   Settings16Regular, Notebook24Regular, NotebookError24Regular,
   ContentView20Regular
 } from '@vicons/fluent'
+import { useLocalStorage } from '@/composables/useLocalStorage'
 
 const route = useRoute()
 const router = useRouter()
-const collapsed = ref(false)
+const collapsed = useLocalStorage<boolean>('sidebar-collapsed', false)
 
-onMounted(() => {
-  const saved = localStorage.getItem('sidebar-collapsed')
-  if (saved !== null) collapsed.value = saved === 'true'
-})
-
-const toggleCollapse = () => {
-  collapsed.value = !collapsed.value
-  localStorage.setItem('sidebar-collapsed', String(collapsed.value))
-}
+const toggleCollapse = () => { collapsed.value = !collapsed.value }
 
 const menuOptions: MenuOption[] = [
   {
